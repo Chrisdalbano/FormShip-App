@@ -1,0 +1,83 @@
+int-env/
+# ---- Python / Django ----
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django migrations (typically you commit these, but during early development, you may want to ignore)
+*/migrations/*.pyc
+*/migrations/*.pyo
+*/migrations/*.log
+
+# Local development database
+db.sqlite3
+db.sqlite3-journal
+
+# Django static files and media (generated files, you might want to handle this in production differently)
+staticfiles/
+media/
+
+# Logs
+*.log
+*.out
+*.err
+
+# Secrets and environment files
+env
+.env
+*.env
+secrets.json
+
+# Coverage reports
+.coverage
+*.cover
+coverage.xml
+htmlcov/
+
+# ---- Node / Vue.js ----
+
+# Node.js dependencies
+node_modules/
+
+# Vue.js build output (generated on running `npm run build`)
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Lockfiles
+package-lock.json
+yarn.lock
+
+# ---- Environment files ----
+
+# Local environment files for Django and Vue.js
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ---- General IDE / OS / System ----
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+
+# JetBrains IDE project files
+*.iml
