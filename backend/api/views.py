@@ -1,5 +1,3 @@
-# backend/api/views.py
-
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -62,53 +60,10 @@ def parse_quiz_text(generated_text, quiz_type, option_count):
     return questions if questions else None
 
 
-@api_view(["GET"])
-def list_quizzes(request):
-    """
-    Lists all quizzes available in the database.
-    """
-    quizzes = Quiz.objects.all()
-    serializer = QuizSerializer(quizzes, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["GET", "PUT", "DELETE"])
-def quiz_detail(request, quiz_id):
-    """
-    Handles GET, PUT, DELETE requests for a single quiz.
-
-    Args:
-        request: The HTTP request object.
-        quiz_id (int): ID of the quiz to retrieve, update, or delete.
-
-    Returns:
-        Response: JSON serialized quiz object or an error message.
-    """
-    quiz = get_object_or_404(Quiz, id=quiz_id)
-
-    if request.method == "GET":
-        # Return the quiz data
-        serializer = QuizSerializer(quiz)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    elif request.method == "PUT":
-        # Update the quiz details
-        serializer = QuizSerializer(quiz, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    elif request.method == "DELETE":
-        # Delete the quiz
-        quiz.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 @api_view(["POST"])
 def create_quiz(request):
     """
-    Creates a new quiz by generating questions with OpenAI API.
+    Creates a new quiz by generating questions with OpenAI API or by analyzing user-provided knowledge base.
     """
     try:
         # Get user input from the request
@@ -118,18 +73,32 @@ def create_quiz(request):
         option_count = int(request.data.get("option_count", 4))  # New parameter
         difficulty = request.data.get("difficulty", "easy")
         quiz_type = request.data.get("quiz_type", "multiple-choice")
+        knowledge_base = request.data.get(
+            "knowledge_base", None
+        )  # User-provided knowledge base
 
         if not title or not topic:
             raise ValueError("Title and topic are required fields.")
 
-        # Generate quiz questions using OpenAI API (ChatCompletion)
-        prompt = (
-            f"Generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
-            f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
-            f"Return valid JSON in the format: "
-            f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
-            f"Ensure that there are only {option_count} options per question, even if some are empty."
-        )
+        if knowledge_base:
+            # Use the provided knowledge base to generate the quiz questions
+            prompt = (
+                f"Based on the following knowledge base, generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
+                f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
+                f"The knowledge base is: {knowledge_base} "
+                f"Return valid JSON in the format: "
+                f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
+                f"Ensure that there are only {option_count} options per question, even if some are empty. If the answer cannot be found in the knowledge base, respond with 'Couldn't find the answer.'"
+            )
+        else:
+            # Generate quiz questions using OpenAI API (ChatCompletion)
+            prompt = (
+                f"Generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
+                f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
+                f"Return valid JSON in the format: "
+                f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
+                f"Ensure that there are only {option_count} options per question, even if some are empty."
+            )
 
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -193,19 +162,47 @@ def create_quiz(request):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["DELETE"])
-def delete_quiz(request, quiz_id):
+@api_view(["GET"])
+def list_quizzes(request):
     """
-    Deletes a quiz by its ID.
+    Lists all quizzes available in the database.
     """
-    try:
-        quiz = Quiz.objects.get(id=quiz_id)
+    quizzes = Quiz.objects.all()
+    serializer = QuizSerializer(quizzes, many=True)
+    return Response(serializer.data)
+
+
+@api_view(["GET", "PUT", "DELETE"])
+def quiz_detail(request, quiz_id):
+    """
+    Handles GET, PUT, DELETE requests for a single quiz.
+
+    Args:
+        request: The HTTP request object.
+        quiz_id (int): ID of the quiz to retrieve, update, or delete.
+
+    Returns:
+        Response: JSON serialized quiz object or an error message.
+    """
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+
+    if request.method == "GET":
+        # Return the quiz data
+        serializer = QuizSerializer(quiz)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    elif request.method == "PUT":
+        # Update the quiz details
+        serializer = QuizSerializer(quiz, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == "DELETE":
+        # Delete the quiz
         quiz.delete()
-        return Response(
-            {"message": "Quiz deleted successfully"}, status=status.HTTP_204_NO_CONTENT
-        )
-    except Quiz.DoesNotExist:
-        return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])
@@ -232,6 +229,8 @@ def duplicate_quiz(request, quiz_id):
                 option_a=question.option_a,
                 option_b=question.option_b,
                 option_c=question.option_c,
+                option_d=question.option_d,
+                option_e=question.option_e,
                 correct_answer=question.correct_answer,
             )
 
@@ -257,26 +256,6 @@ def share_quiz(request, quiz_id):
         return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(["GET"])
-def get_quiz(request, quiz_id):
-    """
-    Fetches a quiz by its ID.
-
-    Args:
-        request: The HTTP request object.
-        quiz_id (int): ID of the quiz to retrieve.
-
-    Returns:
-        Response: JSON serialized quiz object or an error message.
-    """
-    try:
-        quiz = Quiz.objects.get(id=quiz_id)
-        serializer = QuizSerializer(quiz)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    except Quiz.DoesNotExist:
-        return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["POST"])
