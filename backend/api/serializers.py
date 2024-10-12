@@ -1,7 +1,32 @@
 # backend/api/serializers.py
 
 from rest_framework import serializers
-from .models import Quiz, Question, UserQuizHistory, SharedQuiz, UserResult
+from .models import Quiz, Question, UserQuizHistory, SharedQuiz, UserResult, Group
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = "__all__"
+
+
+class QuizSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Quiz
+        fields = [
+            "id",
+            "group",
+            "title",
+            "topic",
+            "difficulty",
+            "question_count",
+            "display_results",
+            "require_password",
+            "password",
+            "allow_anonymous",
+            "require_name",
+            "created_at",
+        ]
 
 
 class QuestionSerializer(serializers.ModelSerializer):

@@ -2,12 +2,13 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Quiz, Question, SharedQuiz, UserResult
+from .models import Group, Quiz, Question, SharedQuiz, UserResult
 from .serializers import (
     QuizSerializer,
     QuestionSerializer,
     SharedQuizSerializer,
     UserResultSerializer,
+    GroupSerializer,
 )
 import os
 from openai import OpenAI, APIError, APIConnectionError, RateLimitError
@@ -79,9 +80,14 @@ def create_quiz(request):
         password = request.data.get("password", None)
         allow_anonymous = request.data.get("allow_anonymous", False)
         require_name = request.data.get("require_name", False)
+        group_id = request.data.get("group_id", None)
 
         if not title or not topic:
             raise ValueError("Title and topic are required fields.")
+
+        # Assign quiz_type if not explicitly provided
+        if not quiz_type:
+            quiz_type = "multiple-choice" if option_count > 1 else "single-choice"
 
         # Create prompt for the AI based on whether a knowledge base is provided
         if knowledge_base:
@@ -124,6 +130,10 @@ def create_quiz(request):
             raise ValueError("Failed to parse questions from OpenAI response.")
 
         # Create a new quiz instance
+        group = None
+        if group_id:
+            group = Group.objects.get(id=group_id)
+
         quiz = Quiz.objects.create(
             title=title,
             topic=topic,
@@ -135,6 +145,7 @@ def create_quiz(request):
             password=password,
             require_name=require_name,
             display_results=display_results,
+            group=group,
         )
 
         # Create questions and associate them with the quiz
@@ -166,6 +177,9 @@ def create_quiz(request):
         print(f"Validation Error: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    except Group.DoesNotExist:
+        return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
+
     except Exception as e:
         # General exception for unexpected errors
         print(f"General Error: {str(e)}")
@@ -178,6 +192,13 @@ def list_quizzes(request):
     Lists all quizzes available in the database.
     """
     quizzes = Quiz.objects.all()
+    group_id = request.query_params.get("group_id", None)
+
+    if group_id:
+        quizzes = quizzes.filter(group__id=group_id)
+    else:
+        quizzes = quizzes.filter(group__isnull=True)
+
     serializer = QuizSerializer(quizzes, many=True)
     return Response(serializer.data)
 
@@ -230,6 +251,7 @@ def duplicate_quiz(request, quiz_id):
             difficulty=original_quiz.difficulty,
             question_count=original_quiz.question_count,
             quiz_type=original_quiz.quiz_type,
+            group=original_quiz.group,
         )
 
         for question in original_questions:
@@ -363,3 +385,104 @@ def create_question(request, quiz_id):
         serializer.save(quiz=quiz)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "POST"])
+def group_list(request):
+    if request.method == "GET":
+        groups = Group.objects.all().order_by("order")
+        serializer = GroupSerializer(groups, many=True)
+        return Response(serializer.data)
+
+    elif request.method == "POST":
+        serializer = GroupSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET", "PUT", "DELETE"])
+def group_detail(request, group_id):
+    try:
+        group = Group.objects.get(pk=group_id)
+    except Group.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        serializer = GroupSerializer(group)
+        return Response(serializer.data)
+
+    elif request.method == "PUT":
+        serializer = GroupSerializer(group, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    elif request.method == "DELETE":
+        # Allow deleting an empty group
+        group.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PUT"])
+def move_quiz_to_group(request, quiz_id):
+    try:
+        quiz = Quiz.objects.get(pk=quiz_id)
+    except Quiz.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+
+    group_id = request.data.get("group_id", None)
+
+    if group_id:
+        try:
+            group = Group.objects.get(pk=group_id)
+        except Group.DoesNotExist:
+            return Response(
+                {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+        quiz.group = group
+    else:
+        # Remove from group if no group_id is provided
+        quiz.group = None
+
+    quiz.save()
+    serializer = QuizSerializer(quiz)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["PUT"])
+def update_quiz_order(request):
+    """
+    Updates the order of quizzes.
+    """
+    try:
+        quiz_orders = request.data.get("quiz_orders", [])
+        for quiz_data in quiz_orders:
+            quiz = Quiz.objects.get(id=quiz_data["id"])
+            quiz.order = quiz_data["order"]
+            quiz.save()
+        return Response(status=status.HTTP_200_OK)
+    except Quiz.DoesNotExist:
+        return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PUT"])
+def update_group_order(request):
+    """
+    Updates the order of groups.
+    """
+    try:
+        group_orders = request.data.get("group_orders", [])
+        for group_data in group_orders:
+            group = Group.objects.get(id=group_data["id"])
+            group.order = group_data["order"]
+            group.save()
+        return Response(status=status.HTTP_200_OK)
+    except Group.DoesNotExist:
+        return Response({"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
