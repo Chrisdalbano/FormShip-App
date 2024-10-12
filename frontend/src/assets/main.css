@@ -1,4 +1,4 @@
-@import './base.css';
+@import './tailwind.css';
 
 body {
   @apply bg-gray-100 text-gray-900;
@@ -24,4 +24,12 @@ p {
 
 a {
   @apply text-blue-600 hover:underline;
+}
+
+.sub-quiz-button {
+  @apply rounded bg-gray-800 text-white p-1 mx-1 transition-all
+}
+
+.sub-quiz-button:hover {
+  opacity: 0.7;
 }
