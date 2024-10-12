@@ -5,9 +5,7 @@
     <h1 class="text-3xl font-bold mb-4">Edit Quiz</h1>
     <form @submit.prevent="updateQuiz">
       <div class="mb-4">
-        <label for="title" class="block text-lg font-semibold mb-2"
-          >Quiz Title</label
-        >
+        <label for="title" class="block text-lg font-semibold mb-2">Quiz Title</label>
         <input
           v-model="quiz.title"
           type="text"
@@ -17,9 +15,7 @@
         />
       </div>
       <div class="mb-4">
-        <label for="topic" class="block text-lg font-semibold mb-2"
-          >Topic</label
-        >
+        <label for="topic" class="block text-lg font-semibold mb-2">Topic</label>
         <input
           v-model="quiz.topic"
           type="text"
@@ -44,27 +40,19 @@
           />
         </div>
         <div class="mb-4">
-          <label class="block text-md font-semibold mb-1">Option A</label>
-          <input
-            v-model="question.option_a"
-            type="text"
+          <label class="block text-md font-semibold mb-1">Number of Options</label>
+          <select
+            v-model="question.option_count"
+            @change="adjustOptions(question)"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
-            required
-          />
+          >
+            <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
+          </select>
         </div>
-        <div class="mb-4">
-          <label class="block text-md font-semibold mb-1">Option B</label>
+        <div v-for="option in visibleOptions(question)" :key="option.field" class="mb-4">
+          <label class="block text-md font-semibold mb-1">{{ option.label }}</label>
           <input
-            v-model="question.option_b"
-            type="text"
-            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
-            required
-          />
-        </div>
-        <div class="mb-4">
-          <label class="block text-md font-semibold mb-1">Option C</label>
-          <input
-            v-model="question.option_c"
+            v-model="question[option.field]"
             type="text"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
           />
@@ -77,7 +65,9 @@
           >
             <option value="A">A</option>
             <option value="B">B</option>
-            <option value="C" v-if="question.option_c">C</option>
+            <option v-if="question.option_c" value="C">C</option>
+            <option v-if="question.option_d" value="D">D</option>
+            <option v-if="question.option_e" value="E">E</option>
           </select>
         </div>
         <button
@@ -110,84 +100,59 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 
-// Route and Router instances
 const route = useRoute()
 const router = useRouter()
 const quizId = route.params.id
-
-// State for the quiz object
 const quiz = ref({
   title: '',
   topic: '',
   questions: [],
 })
 
-const originalQuiz = ref(null) // To keep track of original state for comparisons
-
-// Base API URL
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-// Fetch quiz data when the component mounts
+// Option configuration
+const optionsConfig = [
+  { label: 'Option A', field: 'option_a' },
+  { label: 'Option B', field: 'option_b' },
+  { label: 'Option C', field: 'option_c' },
+  { label: 'Option D', field: 'option_d' },
+  { label: 'Option E', field: 'option_e' },
+]
+
 onMounted(async () => {
   try {
     const response = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`)
     quiz.value = response.data
-    originalQuiz.value = JSON.parse(JSON.stringify(response.data)) // Deep clone to track changes
   } catch (error) {
     console.error('Error fetching quiz:', error)
-    alert('Failed to fetch quiz. Please try again later.')
   }
 })
 
-// Function to update the quiz and questions
 const updateQuiz = async () => {
   try {
-    // Update only if title or topic has changed
-    if (
-      quiz.value.title !== originalQuiz.value.title ||
-      quiz.value.topic !== originalQuiz.value.topic
-    ) {
-      await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, {
-        title: quiz.value.title,
-        topic: quiz.value.topic,
-        question_count: quiz.value.questions.length,
-      })
-    }
+    // Update quiz details
+    const { title, topic, questions } = quiz.value
+    await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, { title, topic })
 
-    // Track changes for each question and send requests accordingly
-    for (const question of quiz.value.questions) {
-      const originalQuestion = originalQuiz.value.questions.find(
-        q => q.id === question.id,
-      )
-
+    // Prepare updated questions
+    for (const question of questions) {
+      const questionData = {
+        question_text: question.question_text,
+        option_a: question.option_a,
+        option_b: question.option_b,
+        option_c: question.option_c || null,
+        option_d: question.option_d || null,
+        option_e: question.option_e || null,
+        correct_answer: question.correct_answer,
+      }
       if (question.id) {
-        // Only update if question fields have changed
-        if (
-          !originalQuestion ||
-          JSON.stringify(originalQuestion) !== JSON.stringify(question)
-        ) {
-          const questionData = {
-            question_text: question.question_text,
-            option_a: question.option_a,
-            option_b: question.option_b,
-            option_c: question.option_c,
-            correct_answer: question.correct_answer,
-          }
-          await axios.put(
-            `${apiBaseUrl}/questions/${question.id}/`,
-            questionData,
-          )
-        }
+        // Update existing question
+        await axios.put(`${apiBaseUrl}/questions/${question.id}/`, questionData)
       } else {
         // Create new question
-        const newQuestionData = {
-          ...question,
-          quiz: quizId,
-        }
-        await axios.post(
-          `${apiBaseUrl}/quizzes/${quizId}/questions/`,
-          newQuestionData,
-        )
+        questionData.quiz = quizId
+        await axios.post(`${apiBaseUrl}/quizzes/${quizId}/questions/`, questionData)
       }
     }
 
@@ -199,27 +164,36 @@ const updateQuiz = async () => {
   }
 }
 
-// Function to add a new question to the quiz
 const addQuestion = () => {
   quiz.value.questions.push({
     question_text: '',
     option_a: '',
     option_b: '',
     option_c: '',
+    option_d: '',
+    option_e: '',
     correct_answer: 'A',
+    option_count: 2,
   })
 }
 
-// Function to delete a question from the quiz
-const deleteQuestion = async index => {
+// Adjust number of options displayed based on user selection
+const adjustOptions = (question) => {
+  question.option_count = Math.max(2, Math.min(question.option_count, 5)) // Clamp between 2 and 5
+}
+
+// Compute visible options based on user's selection
+const visibleOptions = (question) => {
+  return optionsConfig.slice(0, question.option_count)
+}
+
+const deleteQuestion = async (index) => {
   const question = quiz.value.questions[index]
   if (question.id) {
     try {
       await axios.delete(`${apiBaseUrl}/questions/${question.id}/`)
     } catch (error) {
       console.error('Error deleting question:', error)
-      alert('Failed to delete question. Please try again.')
-      return
     }
   }
   quiz.value.questions.splice(index, 1)
