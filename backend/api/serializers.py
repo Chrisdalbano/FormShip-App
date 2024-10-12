@@ -13,6 +13,8 @@ class QuestionSerializer(serializers.ModelSerializer):
             "option_a",
             "option_b",
             "option_c",
+            "option_d",
+            "option_e",
             "correct_answer",
         ]
 
@@ -35,6 +37,13 @@ class QuizSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+    def validate_questions(self, value):
+        if len(value) < 1:
+            raise serializers.ValidationError("A quiz must have at least 1 questions.")
+        if len(value) > 25:
+            raise serializers.ValidationError("A quiz can have up to 25 questions.")
+        return value
+
 
 class UserQuizHistorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,7 +56,8 @@ class SharedQuizSerializer(serializers.ModelSerializer):
         model = SharedQuiz
         fields = "__all__"
 
+
 class UserResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserResult
-        fields = ['quiz', 'user_name', 'score', 'total_questions', 'created_at']
+        fields = ["quiz", "user_name", "score", "total_questions", "created_at"]

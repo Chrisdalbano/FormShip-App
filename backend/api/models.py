@@ -26,6 +26,8 @@ class Question(models.Model):
     option_a = models.CharField(max_length=255)
     option_b = models.CharField(max_length=255)
     option_c = models.CharField(max_length=255, null=True, blank=True)
+    option_d = models.CharField(max_length=255, null=True, blank=True)
+    option_e = models.CharField(max_length=255, null=True, blank=True)
     correct_answer = models.CharField(max_length=1)
 
     def __str__(self):

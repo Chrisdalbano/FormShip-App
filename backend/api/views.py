@@ -21,13 +21,14 @@ client = OpenAI(
 )
 
 
-def parse_quiz_text(generated_text, quiz_type):
+def parse_quiz_text(generated_text, quiz_type, option_count):
     """
     Parses the generated text from OpenAI into quiz questions.
 
     Args:
         generated_text (str): JSON formatted string of questions.
         quiz_type (str): Type of quiz, e.g. "multiple-choice".
+        option_count (int): Number of options per question.
 
     Returns:
         list: A list of questions dictionaries or None if parsing fails.
@@ -38,12 +39,20 @@ def parse_quiz_text(generated_text, quiz_type):
         data = json.loads(generated_text)
         if quiz_type == "multiple-choice" and "questions" in data:
             for item in data["questions"]:
+                # Extract options dynamically based on option_count
+                options = {
+                    chr(65 + i): item["options"].get(chr(65 + i), None)
+                    for i in range(option_count)
+                }
+
                 questions.append(
                     {
                         "question_text": item["question"],
-                        "option_a": item["options"].get("A"),
-                        "option_b": item["options"].get("B"),
-                        "option_c": item["options"].get("C"),
+                        "option_a": options.get("A"),
+                        "option_b": options.get("B"),
+                        "option_c": options.get("C"),
+                        "option_d": options.get("D") if option_count > 3 else None,
+                        "option_e": options.get("E") if option_count > 4 else None,
                         "correct_answer": item["correct_answer"],
                     }
                 )
@@ -106,6 +115,7 @@ def create_quiz(request):
         title = request.data.get("title")
         topic = request.data.get("topic")
         question_count = int(request.data.get("question_count", 5))
+        option_count = int(request.data.get("option_count", 4))  # New parameter
         difficulty = request.data.get("difficulty", "easy")
         quiz_type = request.data.get("quiz_type", "multiple-choice")
 
@@ -114,9 +124,11 @@ def create_quiz(request):
 
         # Generate quiz questions using OpenAI API (ChatCompletion)
         prompt = (
-            f"Generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' as a JSON array. "
-            f"Each question should include: 'question', 'options' with keys 'A', 'B', 'C' (optional), and 'correct_answer'. "
-            f'Return only valid JSON in the following format: {{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "..."}}, "correct_answer": "..."}}]}}'
+            f"Generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
+            f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
+            f"Return valid JSON in the format: "
+            f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
+            f"Ensure that there are only {option_count} options per question, even if some are empty."
         )
 
         response = client.chat.completions.create(
@@ -132,7 +144,7 @@ def create_quiz(request):
         generated_text = response.choices[0].message.content.strip()
 
         # Parse the generated text to extract questions
-        questions = parse_quiz_text(generated_text, quiz_type)
+        questions = parse_quiz_text(generated_text, quiz_type, option_count)
 
         if not questions:
             raise ValueError("Failed to parse questions from OpenAI response.")
@@ -151,9 +163,11 @@ def create_quiz(request):
             Question.objects.create(
                 quiz=quiz,
                 question_text=q["question_text"],
-                option_a=q["option_a"],
-                option_b=q["option_b"],
+                option_a=q.get("option_a"),
+                option_b=q.get("option_b"),
                 option_c=q.get("option_c"),
+                option_d=q.get("option_d"),
+                option_e=q.get("option_e"),
                 correct_answer=q["correct_answer"],
             )
 
