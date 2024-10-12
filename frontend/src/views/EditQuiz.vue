@@ -5,7 +5,9 @@
     <h1 class="text-3xl font-bold mb-4">Edit Quiz</h1>
     <form @submit.prevent="updateQuiz">
       <div class="mb-4">
-        <label for="title" class="block text-lg font-semibold mb-2">Quiz Title</label>
+        <label for="title" class="block text-lg font-semibold mb-2"
+          >Quiz Title</label
+        >
         <input
           v-model="quiz.title"
           type="text"
@@ -15,7 +17,9 @@
         />
       </div>
       <div class="mb-4">
-        <label for="topic" class="block text-lg font-semibold mb-2">Topic</label>
+        <label for="topic" class="block text-lg font-semibold mb-2"
+          >Topic</label
+        >
         <input
           v-model="quiz.topic"
           type="text"
@@ -24,6 +28,52 @@
           required
         />
       </div>
+
+      <!-- Sharing Settings -->
+      <div class="mb-4">
+        <label for="displayResults" class="block text-lg font-semibold mb-2"
+          >Display Results After Quiz?</label
+        >
+        <input
+          type="checkbox"
+          v-model="quiz.display_results"
+          id="displayResults"
+        />
+      </div>
+      <div class="mb-4">
+        <label for="requirePassword" class="block text-lg font-semibold mb-2"
+          >Require Password to Access Quiz?</label
+        >
+        <input
+          type="checkbox"
+          v-model="quiz.require_password"
+          id="requirePassword"
+        />
+        <input
+          v-if="quiz.require_password"
+          type="password"
+          v-model="quiz.password"
+          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mt-2"
+          placeholder="Enter password"
+        />
+      </div>
+      <div class="mb-4">
+        <label for="allowAnonymous" class="block text-lg font-semibold mb-2"
+          >Allow Anonymous Users?</label
+        >
+        <input
+          type="checkbox"
+          v-model="quiz.allow_anonymous"
+          id="allowAnonymous"
+        />
+      </div>
+      <div class="mb-4">
+        <label for="requireName" class="block text-lg font-semibold mb-2"
+          >Require Name/Nickname?</label
+        >
+        <input type="checkbox" v-model="quiz.require_name" id="requireName" />
+      </div>
+
       <div
         v-for="(question, index) in quiz.questions"
         :key="question.id || index"
@@ -40,7 +90,9 @@
           />
         </div>
         <div class="mb-4">
-          <label class="block text-md font-semibold mb-1">Number of Options</label>
+          <label class="block text-md font-semibold mb-1"
+            >Number of Options</label
+          >
           <select
             v-model="question.option_count"
             @change="adjustOptions(question)"
@@ -49,8 +101,14 @@
             <option v-for="n in 5" :key="n" :value="n">{{ n }}</option>
           </select>
         </div>
-        <div v-for="option in visibleOptions(question)" :key="option.field" class="mb-4">
-          <label class="block text-md font-semibold mb-1">{{ option.label }}</label>
+        <div
+          v-for="option in visibleOptions(question)"
+          :key="option.field"
+          class="mb-4"
+        >
+          <label class="block text-md font-semibold mb-1">{{
+            option.label
+          }}</label>
           <input
             v-model="question[option.field]"
             type="text"
@@ -107,6 +165,11 @@ const quiz = ref({
   title: '',
   topic: '',
   questions: [],
+  display_results: true,
+  require_password: false,
+  password: '',
+  allow_anonymous: false,
+  require_name: false,
 })
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -132,8 +195,29 @@ onMounted(async () => {
 const updateQuiz = async () => {
   try {
     // Update quiz details
-    const { title, topic, questions } = quiz.value
-    await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, { title, topic })
+    const {
+      title,
+      topic,
+      questions,
+      display_results,
+      require_password,
+      password,
+      allow_anonymous,
+      require_name,
+    } = quiz.value
+
+    await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, {
+      title,
+      topic,
+      difficulty: quiz.value.difficulty, // Ensure all necessary fields are passed
+      question_count: questions.length,
+      quiz_type: quiz.value.quiz_type, // Add any additional properties needed by backend
+      display_results,
+      require_password,
+      password,
+      allow_anonymous,
+      require_name,
+    })
 
     // Prepare updated questions
     for (const question of questions) {
@@ -152,7 +236,10 @@ const updateQuiz = async () => {
       } else {
         // Create new question
         questionData.quiz = quizId
-        await axios.post(`${apiBaseUrl}/quizzes/${quizId}/questions/`, questionData)
+        await axios.post(
+          `${apiBaseUrl}/quizzes/${quizId}/questions/`,
+          questionData,
+        )
       }
     }
 
@@ -178,16 +265,16 @@ const addQuestion = () => {
 }
 
 // Adjust number of options displayed based on user selection
-const adjustOptions = (question) => {
+const adjustOptions = question => {
   question.option_count = Math.max(2, Math.min(question.option_count, 5)) // Clamp between 2 and 5
 }
 
 // Compute visible options based on user's selection
-const visibleOptions = (question) => {
+const visibleOptions = question => {
   return optionsConfig.slice(0, question.option_count)
 }
 
-const deleteQuestion = async (index) => {
+const deleteQuestion = async index => {
   const question = quiz.value.questions[index]
   if (question.id) {
     try {

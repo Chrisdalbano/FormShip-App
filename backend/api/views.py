@@ -70,16 +70,20 @@ def create_quiz(request):
         title = request.data.get("title")
         topic = request.data.get("topic")
         question_count = int(request.data.get("question_count", 5))
-        option_count = int(request.data.get("option_count", 4))  # New parameter
+        option_count = int(request.data.get("option_count", 4))
         difficulty = request.data.get("difficulty", "easy")
         quiz_type = request.data.get("quiz_type", "multiple-choice")
-        knowledge_base = request.data.get(
-            "knowledge_base", None
-        )  # User-provided knowledge base
+        knowledge_base = request.data.get("knowledge_base", None)
+        display_results = request.data.get("display_results", True)
+        require_password = request.data.get("require_password", False)
+        password = request.data.get("password", None)
+        allow_anonymous = request.data.get("allow_anonymous", False)
+        require_name = request.data.get("require_name", False)
 
         if not title or not topic:
             raise ValueError("Title and topic are required fields.")
 
+        # Create prompt for the AI based on whether a knowledge base is provided
         if knowledge_base:
             # Use the provided knowledge base to generate the quiz questions
             prompt = (
@@ -88,7 +92,7 @@ def create_quiz(request):
                 f"The knowledge base is: {knowledge_base} "
                 f"Return valid JSON in the format: "
                 f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
-                f"Ensure that there are only {option_count} options per question, even if some are empty. If the answer cannot be found in the knowledge base, respond with 'Couldn't find the answer.'"
+                f"Ensure that there are only {option_count} options per question, even if some are empty."
             )
         else:
             # Generate quiz questions using OpenAI API (ChatCompletion)
@@ -100,6 +104,7 @@ def create_quiz(request):
                 f"Ensure that there are only {option_count} options per question, even if some are empty."
             )
 
+        # Make request to OpenAI to generate questions
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -125,6 +130,11 @@ def create_quiz(request):
             difficulty=difficulty,
             question_count=question_count,
             quiz_type=quiz_type,
+            allow_anonymous=allow_anonymous,
+            require_password=require_password,
+            password=password,
+            require_name=require_name,
+            display_results=display_results,
         )
 
         # Create questions and associate them with the quiz

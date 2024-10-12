@@ -8,16 +8,14 @@ import uuid
 class Quiz(models.Model):
     title = models.CharField(max_length=255)
     topic = models.CharField(max_length=255)
-    difficulty = models.CharField(max_length=50, default="easy")
     question_count = models.IntegerField()
-    quiz_type = models.CharField(max_length=50, default="multiple-choice")
-    created_at = models.DateTimeField(auto_now_add=True)
-    creator = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
-    is_shared = models.BooleanField(default=False)
-    is_editable = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.title
+    difficulty = models.CharField(max_length=50)
+    quiz_type = models.CharField(max_length=50)
+    allow_anonymous = models.BooleanField(default=False)
+    require_password = models.BooleanField(default=False)
+    password = models.CharField(max_length=255, null=True, blank=True)
+    require_name = models.BooleanField(default=False)
+    display_results = models.BooleanField(default=True)
 
 
 class Question(models.Model):
@@ -35,12 +33,12 @@ class Question(models.Model):
 
 
 class SharedQuiz(models.Model):
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    quiz = models.ForeignKey(
+        Quiz, on_delete=models.CASCADE, related_name="shared_quizzes"
+    )
+    share_link = models.URLField()
+    requires_authentication = models.BooleanField(default=False)
     shared_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Shared Quiz {self.uuid} from Quiz {self.quiz.title}"
 
 
 class UserQuizHistory(models.Model):
@@ -52,8 +50,9 @@ class UserQuizHistory(models.Model):
 
 
 class UserResult(models.Model):
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
-    user_name = models.CharField(max_length=255)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="results")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    nickname = models.CharField(max_length=255, null=True, blank=True)
     score = models.IntegerField()
-    total_questions = models.IntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(auto_now_add=True)
+    anonymous_id = models.CharField(max_length=255, null=True, blank=True)

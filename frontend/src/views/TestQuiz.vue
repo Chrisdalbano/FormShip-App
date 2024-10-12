@@ -1,7 +1,50 @@
 <template>
   <div class="zen-container">
     <h1>Test Quiz</h1>
-    <div v-if="quiz && !showResults">
+
+    <!-- Password Prompt if Required -->
+    <div
+      v-if="quiz && quiz.require_password && !passwordValidated && !showResults"
+    >
+      <h2>Enter Password to Access Quiz</h2>
+      <input
+        type="password"
+        v-model="enteredPassword"
+        placeholder="Enter password"
+        class="border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+      />
+      <button
+        @click="validatePassword"
+        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+      >
+        Submit Password
+      </button>
+      <p v-if="passwordError" class="text-red-500 mt-2">
+        Incorrect password. Please try again.
+      </p>
+    </div>
+
+    <!-- Name/Nickname Prompt if Required -->
+    <div
+      v-else-if="quiz && quiz.require_name && !userNameProvided && !showResults"
+    >
+      <h2>Enter Your Name or Nickname</h2>
+      <input
+        type="text"
+        v-model="userName"
+        placeholder="Enter your name"
+        class="border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+      />
+      <button
+        @click="submitName"
+        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+      >
+        Submit Name
+      </button>
+    </div>
+
+    <!-- Quiz Content -->
+    <div v-if="quiz && (!quiz.require_password || passwordValidated) && (!quiz.require_name || userNameProvided) && !showResults">
       <h2>{{ quiz.title }}</h2>
       <p>Topic: {{ quiz.topic }}</p>
       <div
@@ -11,7 +54,7 @@
       >
         <p>{{ index + 1 }}. {{ question.question_text }}</p>
         <div>
-          <label>
+          <label v-if="question.option_a">
             <input
               type="radio"
               :name="'question' + index"
@@ -20,7 +63,7 @@
             />
             A. {{ question.option_a }}
           </label>
-          <label>
+          <label v-if="question.option_b">
             <input
               type="radio"
               :name="'question' + index"
@@ -38,21 +81,54 @@
             />
             C. {{ question.option_c }}
           </label>
+          <label v-if="question.option_d">
+            <input
+              type="radio"
+              :name="'question' + index"
+              value="D"
+              v-model="userAnswers[index]"
+            />
+            D. {{ question.option_d }}
+          </label>
+          <label v-if="question.option_e">
+            <input
+              type="radio"
+              :name="'question' + index"
+              value="E"
+              v-model="userAnswers[index]"
+            />
+            E. {{ question.option_e }}
+          </label>
         </div>
       </div>
-      <button @click="submitAnswers">Submit Answers</button>
+      <button
+        @click="submitAnswers"
+        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+      >
+        Submit Answers
+      </button>
     </div>
-    <p v-else-if="!quiz">Loading quiz...</p>
 
-    <!-- Use the Results Component -->
-    <ResultsView
-      v-if="showResults"
-      :score="score"
-      :totalQuestions="totalQuestions"
-      :questions="quiz.questions"
-      :userAnswers="userAnswers"
-      :xpEarned="calculateXPEarned(score)"
-    />
+    <!-- Loading State -->
+    <p v-else-if="!quiz && !showResults">Loading quiz...</p>
+
+    <!-- Results Section -->
+    <div v-if="showResults">
+      <h2>Quiz Completed!</h2>
+      <div v-if="quiz.display_results">
+        <p>Your Score: {{ score }} / {{ totalQuestions }}</p>
+        <ResultsView
+          :score="score"
+          :totalQuestions="totalQuestions"
+          :questions="quiz.questions"
+          :userAnswers="userAnswers"
+          :xpEarned="calculateXPEarned(score)"
+        />
+      </div>
+      <div v-else>
+        <p>Thank you for completing the quiz!</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -71,8 +147,16 @@ const showResults = ref(false)
 const quizId = route.params.id
 console.log('Quiz ID:', quizId)
 
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+
+// State for Password Requirement
+const passwordValidated = ref(!quiz.value?.require_password) // Set to true if no password is required
+const enteredPassword = ref('')
+const passwordError = ref(false)
+
+// State for Name Requirement
+const userName = ref('')
+const userNameProvided = ref(!quiz.value?.require_name) // Set to true if no name is required
 
 onMounted(async () => {
   try {
@@ -80,14 +164,43 @@ onMounted(async () => {
     console.log('Quiz Data:', response.data)
     quiz.value = response.data
     userAnswers.value = Array(response.data.questions.length).fill(null) // Initialize user answers
+    passwordValidated.value = !quiz.value.require_password // Set password validation status based on quiz
+    userNameProvided.value = !quiz.value.require_name // Set name requirement status based on quiz
   } catch (error) {
     console.error('Error fetching quiz:', error)
   }
 })
 
-const submitAnswers = () => {
+const validatePassword = () => {
+  if (enteredPassword.value === quiz.value.password) {
+    passwordValidated.value = true
+    passwordError.value = false
+  } else {
+    passwordError.value = true
+  }
+}
+
+const submitName = () => {
+  if (userName.value.trim() !== '') {
+    userNameProvided.value = true
+  }
+}
+
+const submitAnswers = async () => {
   calculateScore()
   showResults.value = true
+
+  // Save user quiz result to backend
+  try {
+    const requestData = {
+      quiz_id: quiz.value.id,
+      user_name: userName.value || 'Anonymous',
+      user_answers: userAnswers.value,
+    }
+    await axios.post(`${apiBaseUrl}/submit-quiz-results/`, requestData)
+  } catch (error) {
+    console.error('Error submitting quiz results:', error)
+  }
 }
 
 const calculateScore = () => {
@@ -102,7 +215,7 @@ const calculateScore = () => {
 
 const totalQuestions = ref(quiz.value ? quiz.value.questions.length : 0)
 
-const calculateXPEarned = score => {
+const calculateXPEarned = (score) => {
   // You can define your logic to calculate XP here
   return score * 10
 }
@@ -115,5 +228,14 @@ const calculateXPEarned = score => {
 
 .results {
   margin-top: 2rem;
+}
+
+.zen-container {
+  max-width: 800px;
+  margin: auto;
+}
+
+.button {
+  margin-top: 10px;
 }
 </style>

@@ -4,6 +4,7 @@
   >
     <h1 class="text-3xl font-bold mb-4">Create a New Quiz</h1>
     <form @submit.prevent="createQuiz">
+      <!-- Quiz Information Inputs -->
       <div class="mb-4">
         <label for="title" class="block text-lg font-semibold mb-2"
           >Quiz Title</label
@@ -69,9 +70,12 @@
         <span>Yes, use my provided information to generate the quiz.</span>
       </div>
       <div v-if="useKnowledgeBase" class="mb-4">
-        <label for="knowledgeBaseInput" class="block text-lg font-semibold mb-2"
-          >Knowledge Base Input (Text or Upload File)</label
+        <label
+          for="knowledgeBaseInput"
+          class="block text-lg font-semibold mb-2"
         >
+          Knowledge Base Input (Text or Upload File)
+        </label>
         <textarea
           v-model="knowledgeBaseText"
           id="knowledgeBaseInput"
@@ -84,6 +88,38 @@
           @change="handleFileUpload"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
         />
+      </div>
+      <!-- Sharing Customization Options -->
+      <div class="mb-4">
+        <label for="displayResults" class="block text-lg font-semibold mb-2"
+          >Display Results After Quiz?</label
+        >
+        <input type="checkbox" v-model="displayResults" id="displayResults" />
+      </div>
+      <div class="mb-4">
+        <label for="requirePassword" class="block text-lg font-semibold mb-2"
+          >Require Password to Access Quiz?</label
+        >
+        <input type="checkbox" v-model="requirePassword" id="requirePassword" />
+        <input
+          v-if="requirePassword"
+          type="password"
+          v-model="password"
+          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mt-2"
+          placeholder="Enter password"
+        />
+      </div>
+      <div class="mb-4">
+        <label for="allowAnonymous" class="block text-lg font-semibold mb-2"
+          >Allow Anonymous Users?</label
+        >
+        <input type="checkbox" v-model="allowAnonymous" id="allowAnonymous" />
+      </div>
+      <div class="mb-4">
+        <label for="requireName" class="block text-lg font-semibold mb-2"
+          >Require Name/Nickname?</label
+        >
+        <input type="checkbox" v-model="requireName" id="requireName" />
       </div>
       <button
         type="submit"
@@ -152,6 +188,12 @@ const questions = ref([])
 let createdQuizId = null // Store the created quiz ID
 const loading = ref(false) // Loading state for animation
 
+const displayResults = ref(true) // Toggle to display results after quiz
+const requirePassword = ref(false) // Toggle for requiring password
+const password = ref('') // Password for the quiz
+const allowAnonymous = ref(false) // Allow anonymous users
+const requireName = ref(false) // Require name or nickname for quiz completion
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
 // Handle file upload for knowledge base
@@ -176,19 +218,19 @@ const createQuiz = async () => {
       question_count: questionCount.value,
       option_count: optionCount.value,
       difficulty: 'medium', // You can add a difficulty selection if needed
+      display_results: displayResults.value,
+      require_password: requirePassword.value,
+      password: requirePassword.value ? password.value : null,
+      allow_anonymous: allowAnonymous.value,
+      require_name: requireName.value,
     }
 
     // If the user wants to use their own knowledge base, include it in the request
     if (useKnowledgeBase.value) {
-      if (knowledgeBaseText.value.length > 5000) {
-        // Split into chunks if too long
-        const chunks = splitTextIntoChunks(knowledgeBaseText.value, 4000)
-        requestData.knowledge_base_chunks = chunks
-      } else {
-        requestData.knowledge_base = knowledgeBaseText.value
-      }
+      requestData.knowledge_base = knowledgeBaseText.value
     }
 
+    // Request AI generation for quiz questions
     const response = await axios.post(`${apiBaseUrl}/create-quiz/`, requestData)
 
     // Assign generated questions to the questions array
@@ -210,18 +252,6 @@ const goToEditPage = () => {
   } else {
     alert('No quiz has been created yet.')
   }
-}
-
-// Helper function to split large text into smaller chunks
-const splitTextIntoChunks = (text, maxLength) => {
-  const chunks = []
-  let currentIndex = 0
-  while (currentIndex < text.length) {
-    const chunk = text.slice(currentIndex, currentIndex + maxLength)
-    chunks.push(chunk)
-    currentIndex += maxLength
-  }
-  return chunks
 }
 </script>
 
