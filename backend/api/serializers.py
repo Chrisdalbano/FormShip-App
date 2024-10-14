@@ -4,12 +4,6 @@ from rest_framework import serializers
 from .models import Quiz, Question, UserQuizHistory, SharedQuiz, UserResult, Group
 
 
-class GroupSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Group
-        fields = "__all__"
-
-
 class QuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quiz
@@ -27,6 +21,14 @@ class QuizSerializer(serializers.ModelSerializer):
             "require_name",
             "created_at",
         ]
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    quizzes = QuizSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'color', 'order', 'created_at', 'quizzes']
 
 
 class QuestionSerializer(serializers.ModelSerializer):

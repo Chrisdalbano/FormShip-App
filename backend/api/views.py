@@ -429,34 +429,31 @@ def group_detail(request, group_id):
 @api_view(["PUT"])
 def move_quiz_to_group(request, quiz_id):
     try:
-        quiz = Quiz.objects.get(pk=quiz_id)
-    except Quiz.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
+        quiz = get_object_or_404(
+            Quiz, id=quiz_id
+        )  # Use get_object_or_404 for clarity in errors
+        group_id = request.data.get("group_id", None)
 
-    group_id = request.data.get("group_id", None)
+        if group_id:
+            group = get_object_or_404(Group, id=group_id)
+            quiz.group = group
+        else:
+            quiz.group = None  # Remove from group
 
-    if group_id:
-        try:
-            group = Group.objects.get(pk=group_id)
-        except Group.DoesNotExist:
-            return Response(
-                {"error": "Group not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-        quiz.group = group
-    else:
-        # Remove from group if no group_id is provided
-        quiz.group = None
+        # Update order
+        quiz.order = request.data.get("order", quiz.order)
+        quiz.save()
 
-    quiz.save()
-    serializer = QuizSerializer(quiz)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = QuizSerializer(quiz)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        print(f"Error in move_quiz_to_group: {e}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["PUT"])
 def update_quiz_order(request):
-    """
-    Updates the order of quizzes.
-    """
     try:
         quiz_orders = request.data.get("quiz_orders", [])
         for quiz_data in quiz_orders:
@@ -467,7 +464,9 @@ def update_quiz_order(request):
     except Quiz.DoesNotExist:
         return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
+        print(f"Error updating quiz order: {e}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 @api_view(["PUT"])
