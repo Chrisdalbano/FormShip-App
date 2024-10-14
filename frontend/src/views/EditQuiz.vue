@@ -29,6 +29,51 @@
         />
       </div>
 
+      <!-- Timer Settings -->
+      <div class="mb-4">
+        <label for="isTimed" class="block text-lg font-semibold mb-2"
+          >Set Time Limit for Quiz?</label
+        >
+        <input type="checkbox" v-model="quiz.is_timed" id="isTimed" />
+        <div v-if="quiz.is_timed" class="mt-4">
+          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
+            >Total Time Limit for Quiz (in minutes)</label
+          >
+          <input
+            type="number"
+            v-model="quiz.quiz_time_limit"
+            min="1"
+            id="quizTimeLimit"
+            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          />
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
+          >Set Time Limit for Each Question?</label
+        >
+        <input
+          type="checkbox"
+          v-model="quiz.time_per_question"
+          id="timePerQuestion"
+        />
+        <div v-if="quiz.time_per_question" class="mt-4">
+          <label
+            for="questionTimeLimit"
+            class="block text-lg font-semibold mb-2"
+            >Time Limit per Question (in seconds)</label
+          >
+          <input
+            type="number"
+            v-model="quiz.question_time_limit"
+            min="5"
+            id="questionTimeLimit"
+            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          />
+        </div>
+      </div>
+
       <!-- Sharing Settings -->
       <div class="mb-4">
         <label for="displayResults" class="block text-lg font-semibold mb-2"
@@ -170,6 +215,10 @@ const quiz = ref({
   password: '',
   allow_anonymous: false,
   require_name: false,
+  is_timed: false,
+  quiz_time_limit: null,
+  time_per_question: false,
+  question_time_limit: null,
 })
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -204,6 +253,10 @@ const updateQuiz = async () => {
       password,
       allow_anonymous,
       require_name,
+      is_timed,
+      quiz_time_limit,
+      time_per_question,
+      question_time_limit,
     } = quiz.value
 
     await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, {
@@ -217,6 +270,10 @@ const updateQuiz = async () => {
       password,
       allow_anonymous,
       require_name,
+      is_timed,
+      quiz_time_limit,
+      time_per_question,
+      question_time_limit,
     })
 
     // Prepare updated questions

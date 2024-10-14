@@ -70,12 +70,9 @@
         <span>Yes, use my provided information to generate the quiz.</span>
       </div>
       <div v-if="useKnowledgeBase" class="mb-4">
-        <label
-          for="knowledgeBaseInput"
-          class="block text-lg font-semibold mb-2"
+        <label for="knowledgeBaseInput" class="block text-lg font-semibold mb-2"
+          >Knowledge Base Input (Text or Upload File)</label
         >
-          Knowledge Base Input (Text or Upload File)
-        </label>
         <textarea
           v-model="knowledgeBaseText"
           id="knowledgeBaseInput"
@@ -88,6 +85,45 @@
           @change="handleFileUpload"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
         />
+      </div>
+      <!-- Timer Options -->
+      <div class="mb-4">
+        <label for="isTimed" class="block text-lg font-semibold mb-2"
+          >Set Time Limit for Quiz?</label
+        >
+        <input type="checkbox" v-model="isTimed" id="isTimed" />
+        <div v-if="isTimed" class="mt-4">
+          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
+            >Total Time Limit for Quiz (in minutes)</label
+          >
+          <input
+            type="number"
+            v-model="quizTimeLimit"
+            min="1"
+            id="quizTimeLimit"
+            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          />
+        </div>
+      </div>
+      <div class="mb-4">
+        <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
+          >Set Time Limit for Each Question (in seconds)</label
+        >
+        <input type="checkbox" v-model="timePerQuestion" id="timePerQuestion" />
+        <div v-if="timePerQuestion" class="mt-4">
+          <label
+            for="questionTimeLimit"
+            class="block text-lg font-semibold mb-2"
+            >Time Limit per Question (in seconds)</label
+          >
+          <input
+            type="number"
+            v-model="questionTimeLimit"
+            min="5"
+            id="questionTimeLimit"
+            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          />
+        </div>
       </div>
       <!-- Sharing Customization Options -->
       <div class="mb-4">
@@ -182,21 +218,24 @@ const quizTitle = ref('')
 const quizTopic = ref('')
 const questionCount = ref(2) // Default to 2 questions
 const optionCount = ref(2) // Default to 2 options per question
-const useKnowledgeBase = ref(false) // Toggle for using custom knowledge base
+const useKnowledgeBase = ref(false)
 const knowledgeBaseText = ref('')
 const questions = ref([])
-let createdQuizId = null // Store the created quiz ID
-const loading = ref(false) // Loading state for animation
+let createdQuizId = null
+const loading = ref(false)
 
-const displayResults = ref(true) // Toggle to display results after quiz
-const requirePassword = ref(false) // Toggle for requiring password
-const password = ref('') // Password for the quiz
-const allowAnonymous = ref(false) // Allow anonymous users
-const requireName = ref(false) // Require name or nickname for quiz completion
+const displayResults = ref(true)
+const requirePassword = ref(false)
+const password = ref('')
+const allowAnonymous = ref(false)
+const requireName = ref(false)
+const isTimed = ref(false)
+const quizTimeLimit = ref(null)
+const timePerQuestion = ref(false)
+const questionTimeLimit = ref(null)
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-// Handle file upload for knowledge base
 const handleFileUpload = event => {
   const file = event.target.files[0]
   if (file) {
@@ -208,44 +247,44 @@ const handleFileUpload = event => {
   }
 }
 
-// Function to create quiz and request AI-generated questions
 const createQuiz = async () => {
-  loading.value = true // Start loading
+  loading.value = true
   try {
     const requestData = {
       title: quizTitle.value,
       topic: quizTopic.value,
       question_count: questionCount.value,
       option_count: optionCount.value,
-      difficulty: 'medium', // You can add a difficulty selection if needed
+      difficulty: 'medium',
       display_results: displayResults.value,
       require_password: requirePassword.value,
       password: requirePassword.value ? password.value : null,
       allow_anonymous: allowAnonymous.value,
       require_name: requireName.value,
+      is_timed: isTimed.value,
+      quiz_time_limit: isTimed.value ? quizTimeLimit.value : null,
+      time_per_question: timePerQuestion.value,
+      question_time_limit: timePerQuestion.value
+        ? questionTimeLimit.value
+        : null,
     }
 
-    // If the user wants to use their own knowledge base, include it in the request
     if (useKnowledgeBase.value) {
       requestData.knowledge_base = knowledgeBaseText.value
     }
 
-    // Request AI generation for quiz questions
     const response = await axios.post(`${apiBaseUrl}/create-quiz/`, requestData)
-
-    // Assign generated questions to the questions array
     questions.value = response.data.questions
-    createdQuizId = response.data.id // Store the created quiz ID
+    createdQuizId = response.data.id
     alert('Quiz generated successfully! Please review the questions below.')
   } catch (error) {
     console.error('Error generating quiz:', error)
     alert('Failed to generate quiz. Please try again.')
   } finally {
-    loading.value = false // Stop loading
+    loading.value = false
   }
 }
 
-// Function to navigate to the edit page for the created quiz
 const goToEditPage = () => {
   if (createdQuizId) {
     router.push({ name: 'EditQuiz', params: { id: createdQuizId } })

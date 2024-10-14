@@ -1,3 +1,4 @@
+<!-- eslint-disable no-undef -->
 <template>
   <div class="zen-container">
     <h1>Test Quiz</h1>
@@ -44,9 +45,21 @@
     </div>
 
     <!-- Quiz Content -->
-    <div v-if="quiz && (!quiz.require_password || passwordValidated) && (!quiz.require_name || userNameProvided) && !showResults">
+    <div
+      v-if="
+        quiz &&
+        (!quiz.require_password || passwordValidated) &&
+        (!quiz.require_name || userNameProvided) &&
+        !showResults
+      "
+    >
       <h2>{{ quiz.title }}</h2>
       <p>Topic: {{ quiz.topic }}</p>
+      <div v-if="quiz.is_timed && quizTimeRemaining > 0">
+        <p class="font-semibold text-red-500">
+          Time Remaining: {{ formattedQuizTime }}
+        </p>
+      </div>
       <div
         v-for="(question, index) in quiz.questions"
         :key="index"
@@ -100,6 +113,14 @@
             E. {{ question.option_e }}
           </label>
         </div>
+        <div
+          v-if="quiz.time_per_question && questionTimers[index] > 0"
+          class="mt-2"
+        >
+          <p class="text-red-600">
+            Time Remaining for Question: {{ formattedQuestionTime(index) }}
+          </p>
+        </div>
       </div>
       <button
         @click="submitAnswers"
@@ -133,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import ResultsView from './ResultsView.vue'
@@ -145,31 +166,80 @@ const score = ref(0)
 const showResults = ref(false)
 
 const quizId = route.params.id
-console.log('Quiz ID:', quizId)
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+const apiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 // State for Password Requirement
-const passwordValidated = ref(!quiz.value?.require_password) // Set to true if no password is required
+const passwordValidated = ref(!quiz.value?.require_password)
 const enteredPassword = ref('')
 const passwordError = ref(false)
 
 // State for Name Requirement
 const userName = ref('')
-const userNameProvided = ref(!quiz.value?.require_name) // Set to true if no name is required
+const userNameProvided = ref(!quiz.value?.require_name)
+
+// Timer States
+const quizTimeRemaining = ref(null)
+const questionTimers = ref([])
+
+let quizStartTime = null
 
 onMounted(async () => {
   try {
     const response = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`)
-    console.log('Quiz Data:', response.data)
     quiz.value = response.data
-    userAnswers.value = Array(response.data.questions.length).fill(null) // Initialize user answers
-    passwordValidated.value = !quiz.value.require_password // Set password validation status based on quiz
-    userNameProvided.value = !quiz.value.require_name // Set name requirement status based on quiz
+    userAnswers.value = Array(response.data.questions.length).fill(null)
+    passwordValidated.value = !quiz.value.require_password
+    userNameProvided.value = !quiz.value.require_name
+
+    if (quiz.value.is_timed && quiz.value.quiz_time_limit) {
+      quizTimeRemaining.value = quiz.value.quiz_time_limit * 60
+      quizStartTime = new Date()
+      startQuizTimer()
+    }
+    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
+      questionTimers.value = Array(response.data.questions.length).fill(
+        quiz.value.question_time_limit,
+      )
+      startQuestionTimers()
+    }
   } catch (error) {
     console.error('Error fetching quiz:', error)
   }
 })
+
+const startQuizTimer = () => {
+  const timer = setInterval(() => {
+    if (quizTimeRemaining.value > 0) {
+      quizTimeRemaining.value--
+    } else {
+      clearInterval(timer)
+      submitAnswers()
+    }
+  }, 1000)
+}
+
+const startQuestionTimers = () => {
+  questionTimers.value.forEach((_, index) => {
+    const timer = setInterval(() => {
+      if (questionTimers.value[index] > 0) {
+        questionTimers.value[index]--
+      } else {
+        clearInterval(timer)
+        nextQuestion(index)
+      }
+    }, 1000)
+  })
+}
+
+const nextQuestion = currentIndex => {
+  if (currentIndex < quiz.value.questions.length - 1) {
+    document
+      .querySelector(`[name='question${currentIndex + 1}']`)
+      .scrollIntoView({ behavior: 'smooth' })
+  }
+}
 
 const validatePassword = () => {
   if (enteredPassword.value === quiz.value.password) {
@@ -185,19 +255,32 @@ const submitName = () => {
     userNameProvided.value = true
   }
 }
-
 const submitAnswers = async () => {
   calculateScore()
   showResults.value = true
 
-  // Save user quiz result to backend
+  const userAnswersDict = {}
+  quiz.value.questions.forEach((question, index) => {
+    userAnswersDict[question.id] = userAnswers.value[index]
+  })
+
+  const requestData = {
+    quiz_id: quiz.value.id,
+    user_name: userName.value.trim() ? userName.value : 'Anonymous',
+    user_answers: userAnswersDict,
+    quiz_start_time: quizStartTime?.toISOString(),
+  }
+
+  console.log('Submitting request data:', requestData)
+
   try {
-    const requestData = {
-      quiz_id: quiz.value.id,
-      user_name: userName.value || 'Anonymous',
-      user_answers: userAnswers.value,
+    const response = await axios.post(
+      `${apiBaseUrl}/submit-quiz-results/`,
+      requestData,
+    )
+    if (response.status === 201) {
+      console.log('Quiz results successfully submitted')
     }
-    await axios.post(`${apiBaseUrl}/submit-quiz-results/`, requestData)
   } catch (error) {
     console.error('Error submitting quiz results:', error)
   }
@@ -213,11 +296,23 @@ const calculateScore = () => {
   score.value = calculatedScore
 }
 
-const totalQuestions = ref(quiz.value ? quiz.value.questions.length : 0)
+const calculateXPEarned = score => {
+  // Assuming XP earned is proportional to the score
+  return score * 10 // You can adjust this logic as needed
+}
 
-const calculateXPEarned = (score) => {
-  // You can define your logic to calculate XP here
-  return score * 10
+// eslint-disable-next-line no-undef
+const formattedQuizTime = computed(() => {
+  const minutes = Math.floor(quizTimeRemaining.value / 60)
+  const seconds = quizTimeRemaining.value % 60
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
+})
+
+const formattedQuestionTime = index => {
+  const seconds = questionTimers.value[index]
+  return `${Math.floor(seconds / 60)}:${seconds % 60 < 10 ? '0' : ''}${
+    seconds % 60
+  }`
 }
 </script>
 

@@ -4,33 +4,6 @@ from rest_framework import serializers
 from .models import Quiz, Question, UserQuizHistory, SharedQuiz, UserResult, Group
 
 
-class QuizSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Quiz
-        fields = [
-            "id",
-            "group",
-            "title",
-            "topic",
-            "difficulty",
-            "question_count",
-            "display_results",
-            "require_password",
-            "password",
-            "allow_anonymous",
-            "require_name",
-            "created_at",
-        ]
-
-
-class GroupSerializer(serializers.ModelSerializer):
-    quizzes = QuizSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Group
-        fields = ['id', 'name', 'color', 'order', 'created_at', 'quizzes']
-
-
 class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
@@ -47,25 +20,28 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 class QuizSerializer(serializers.ModelSerializer):
-    questions = QuestionSerializer(
-        many=True, read_only=True
-    )  # Nesting QuestionSerializer
+    questions = QuestionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Quiz
         fields = [
             "id",
+            "group",
             "title",
             "topic",
             "difficulty",
             "question_count",
             "quiz_type",
-            "questions",
-            "allow_anonymous",
+            "display_results",
             "require_password",
             "password",
+            "allow_anonymous",
             "require_name",
-            "display_results",
+            "is_timed",
+            "quiz_time_limit",
+            "time_per_question",
+            "created_at",
+            "questions",
         ]
 
     def validate_questions(self, value):
@@ -74,6 +50,14 @@ class QuizSerializer(serializers.ModelSerializer):
         if len(value) > 25:
             raise serializers.ValidationError("A quiz can have up to 25 questions.")
         return value
+
+
+class GroupSerializer(serializers.ModelSerializer):
+    quizzes = QuizSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Group
+        fields = ["id", "name", "color", "order", "created_at", "quizzes"]
 
 
 class UserQuizHistorySerializer(serializers.ModelSerializer):

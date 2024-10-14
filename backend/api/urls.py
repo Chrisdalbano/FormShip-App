@@ -12,6 +12,7 @@ from .views import (
     move_quiz_to_group,
     update_quiz_order,
     update_group_order,
+    submit_quiz_results,
 )
 
 urlpatterns = [
@@ -29,4 +30,5 @@ urlpatterns = [
     ),
     path("update-quiz-order/", update_quiz_order, name="update_quiz_order"),
     path("update-group-order/", update_group_order, name="update_group_order"),
+    path("submit-quiz-results/", submit_quiz_results, name="submit_quiz_results"),
 ]

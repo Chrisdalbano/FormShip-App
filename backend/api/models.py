@@ -15,6 +15,12 @@ class Group(models.Model):
         return self.name
 
 
+# backend/api/models.py
+
+from django.db import models
+from django.contrib.auth.models import User
+
+
 class Quiz(models.Model):
     group = models.ForeignKey(
         Group, related_name="quizzes", on_delete=models.SET_NULL, null=True, blank=True
@@ -29,10 +35,14 @@ class Quiz(models.Model):
     password = models.CharField(max_length=255, null=True, blank=True)
     allow_anonymous = models.BooleanField(default=False)
     require_name = models.BooleanField(default=False)
-    quiz_type = models.CharField(
-        max_length=50, default="multiple-choice"
-    )  # Add back if needed
+    quiz_type = models.CharField(max_length=50, default="multiple-choice")
     created_at = models.DateTimeField(auto_now_add=True)
+    quiz_time_limit = models.IntegerField(null=True, blank=True)  # in minutes
+    time_per_question = models.IntegerField(null=True, blank=True)  # in seconds
+    is_timed = models.BooleanField(default=False)
+
+    # Add question_time_limit field here
+    question_time_limit = models.IntegerField(null=True, blank=True)  # Add this line
 
     def __str__(self):
         return self.title

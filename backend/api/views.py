@@ -1,4 +1,6 @@
 from django.shortcuts import get_object_or_404
+from datetime import datetime
+import logging
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -61,94 +63,93 @@ def parse_quiz_text(generated_text, quiz_type, option_count):
     return questions if questions else None
 
 
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 @api_view(["POST"])
 def create_quiz(request):
     """
     Creates a new quiz by generating questions with OpenAI API or by analyzing user-provided knowledge base.
     """
     try:
-        # Get user input from the request
+        # Extracting fields from request data
         title = request.data.get("title")
         topic = request.data.get("topic")
         question_count = int(request.data.get("question_count", 5))
         option_count = int(request.data.get("option_count", 4))
         difficulty = request.data.get("difficulty", "easy")
-        quiz_type = request.data.get("quiz_type", "multiple-choice")
         knowledge_base = request.data.get("knowledge_base", None)
         display_results = request.data.get("display_results", True)
         require_password = request.data.get("require_password", False)
-        password = request.data.get("password", None)
+        password = request.data.get("password", "")  # Default to empty string if none
         allow_anonymous = request.data.get("allow_anonymous", False)
         require_name = request.data.get("require_name", False)
-        group_id = request.data.get("group_id", None)
+        is_timed = request.data.get("is_timed", False)
+        quiz_time_limit = (
+            int(request.data.get("quiz_time_limit", 0)) if is_timed else None
+        )
+        time_per_question = request.data.get("time_per_question", False)
+        question_time_limit = (
+            int(request.data.get("question_time_limit", 0))
+            if time_per_question
+            else None
+        )
 
         if not title or not topic:
             raise ValueError("Title and topic are required fields.")
 
-        # Assign quiz_type if not explicitly provided
-        if not quiz_type:
-            quiz_type = "multiple-choice" if option_count > 1 else "single-choice"
-
-        # Create prompt for the AI based on whether a knowledge base is provided
+        # Create a prompt for the AI using the knowledge base or general context
         if knowledge_base:
-            # Use the provided knowledge base to generate the quiz questions
             prompt = (
                 f"Based on the following knowledge base, generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
                 f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
                 f"The knowledge base is: {knowledge_base} "
                 f"Return valid JSON in the format: "
                 f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
-                f"Ensure that there are only {option_count} options per question, even if some are empty."
             )
         else:
-            # Generate quiz questions using OpenAI API (ChatCompletion)
             prompt = (
                 f"Generate {question_count} {difficulty} multiple-choice questions about the topic '{topic}' "
                 f"with each question having exactly {option_count} options labeled A, B, C, D, E as needed. "
                 f"Return valid JSON in the format: "
                 f'{{"questions": [{{"question": "...", "options": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, "correct_answer": "..."}}]}}. '
-                f"Ensure that there are only {option_count} options per question, even if some are empty."
             )
 
-        # Make request to OpenAI to generate questions
+        # Generate quiz questions via OpenAI API
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a quiz generator."},
-                {"role": "user", "content": prompt},
-            ],
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=1000,
             temperature=0.7,
         )
-
         generated_text = response.choices[0].message.content.strip()
+        print("Generated Text from OpenAI:", generated_text)  # Debugging line
 
-        # Parse the generated text to extract questions
-        questions = parse_quiz_text(generated_text, quiz_type, option_count)
-
+        # Parse generated questions
+        questions = parse_quiz_text(generated_text, "multiple-choice", option_count)
         if not questions:
-            raise ValueError("Failed to parse questions from OpenAI response.")
+            raise ValueError(
+                f"Failed to parse questions from OpenAI response: {generated_text}"
+            )
 
-        # Create a new quiz instance
-        group = None
-        if group_id:
-            group = Group.objects.get(id=group_id)
-
+        # Create a quiz instance and save questions
         quiz = Quiz.objects.create(
             title=title,
             topic=topic,
             difficulty=difficulty,
             question_count=question_count,
-            quiz_type=quiz_type,
-            allow_anonymous=allow_anonymous,
+            display_results=display_results,
             require_password=require_password,
             password=password,
+            allow_anonymous=allow_anonymous,
             require_name=require_name,
-            display_results=display_results,
-            group=group,
+            is_timed=is_timed,
+            quiz_time_limit=quiz_time_limit,
+            time_per_question=time_per_question,
+            question_time_limit=question_time_limit,
         )
-
-        # Create questions and associate them with the quiz
         for q in questions:
             Question.objects.create(
                 quiz=quiz,
@@ -158,31 +159,20 @@ def create_quiz(request):
                 option_c=q.get("option_c"),
                 option_d=q.get("option_d"),
                 option_e=q.get("option_e"),
-                correct_answer=q["correct_answer"],
+                correct_answer=q.get("correct_answer"),
             )
-
         serializer = QuizSerializer(quiz)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except (APIError, APIConnectionError, RateLimitError) as e:
-        # Handle OpenAI API errors
-        print(f"OpenAI API Error: {str(e)}")
         return Response(
             {"error": f"OpenAI API error: {str(e)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
     except ValueError as e:
-        # Handle validation errors
-        print(f"Validation Error: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    except Group.DoesNotExist:
-        return Response({"error": "Group not found."}, status=status.HTTP_404_NOT_FOUND)
-
     except Exception as e:
-        # General exception for unexpected errors
-        print(f"General Error: {str(e)}")
+        print(f"Unexpected error in create_quiz: {str(e)}")  # Log unexpected errors
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -197,7 +187,10 @@ def list_quizzes(request):
     if group_id:
         quizzes = quizzes.filter(group__id=group_id)
     else:
-        quizzes = quizzes.filter(group__isnull=True)
+        # Handle ungrouped quizzes if requested
+        grouped = request.query_params.get("grouped", "true").lower() == "true"
+        if not grouped:
+            quizzes = quizzes.filter(group__isnull=True)
 
     serializer = QuizSerializer(quizzes, many=True)
     return Response(serializer.data)
@@ -207,31 +200,21 @@ def list_quizzes(request):
 def quiz_detail(request, quiz_id):
     """
     Handles GET, PUT, DELETE requests for a single quiz.
-
-    Args:
-        request: The HTTP request object.
-        quiz_id (int): ID of the quiz to retrieve, update, or delete.
-
-    Returns:
-        Response: JSON serialized quiz object or an error message.
     """
     quiz = get_object_or_404(Quiz, id=quiz_id)
 
     if request.method == "GET":
-        # Return the quiz data
         serializer = QuizSerializer(quiz)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     elif request.method == "PUT":
-        # Update the quiz details
-        serializer = QuizSerializer(quiz, data=request.data)
+        serializer = QuizSerializer(quiz, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == "DELETE":
-        # Delete the quiz
         quiz.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -290,33 +273,70 @@ def share_quiz(request, quiz_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+logger = logging.getLogger(__name__)
+
+
 @api_view(["POST"])
 def submit_quiz_results(request):
-    """
-    Submits quiz results and calculates the user's score.
-
-    Args:
-        request: The HTTP request object.
-
-    Returns:
-        Response: JSON serialized user result or an error message.
-    """
     try:
+        # Log the request for debugging
+        print("Request data received:", request.data)
+
+        # Extract and validate required fields
         user_name = request.data.get("user_name")
         quiz_id = request.data.get("quiz_id")
         user_answers = request.data.get("user_answers")
+        start_time_str = request.data.get("quiz_start_time")
+
+        if not all([user_name, quiz_id, user_answers]):
+            return Response(
+                {"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not isinstance(user_answers, dict):
+            return Response(
+                {"error": "user_answers must be a dictionary"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         quiz = Quiz.objects.get(id=quiz_id)
         questions = quiz.questions.all()
 
-        # Calculate the score
+        # Validate total time limit if applicable
+        if quiz.is_timed and quiz.quiz_time_limit and start_time_str:
+            start_time = datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+            current_time = datetime.now()
+            elapsed_time = (current_time - start_time).total_seconds() / 60
+
+            if elapsed_time > quiz.quiz_time_limit:
+                return Response(
+                    {"error": "Time limit for the quiz exceeded"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # Validate per-question timing if applicable
         score = 0
         for question in questions:
             user_answer = user_answers.get(str(question.id))
+
+            if quiz.time_per_question:
+                question_start_time_str = request.data.get(
+                    f"question_{question.id}_start_time"
+                )
+                if question_start_time_str:
+                    question_start_time = datetime.strptime(
+                        question_start_time_str, "%Y-%m-%dT%H:%M:%S.%fZ"
+                    )
+                    question_elapsed_time = (
+                        datetime.now() - question_start_time
+                    ).total_seconds()
+
+                    if question_elapsed_time > quiz.time_per_question:
+                        continue
+
             if user_answer == question.correct_answer:
                 score += 1
 
-        # Create UserResult instance
         result = UserResult.objects.create(
             quiz=quiz,
             user_name=user_name,
@@ -329,9 +349,8 @@ def submit_quiz_results(request):
 
     except Quiz.DoesNotExist:
         return Response({"error": "Quiz not found"}, status=status.HTTP_404_NOT_FOUND)
-
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Unexpected error in submit_quiz_results: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -466,7 +485,6 @@ def update_quiz_order(request):
     except Exception as e:
         print(f"Error updating quiz order: {e}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 @api_view(["PUT"])
