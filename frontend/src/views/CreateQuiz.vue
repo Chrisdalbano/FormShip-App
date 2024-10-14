@@ -273,13 +273,23 @@ const createQuiz = async () => {
       requestData.knowledge_base = knowledgeBaseText.value
     }
 
-    const response = await axios.post(`${apiBaseUrl}/create-quiz/`, requestData)
-    questions.value = response.data.questions
-    createdQuizId = response.data.id
-    alert('Quiz generated successfully! Please review the questions below.')
+    const response = await axios.post(
+      `${apiBaseUrl}/quizzes/create/`,
+      requestData,
+    )
+
+    // Check if the response contains the quiz ID
+    if (response.data.id) {
+      createdQuizId = response.data.id
+      questions.value = response.data.questions || []
+      alert('Quiz generated successfully! Please review the questions below.')
+    } else {
+      throw new Error('Quiz ID not returned from backend.')
+    }
   } catch (error) {
     console.error('Error generating quiz:', error)
     alert('Failed to generate quiz. Please try again.')
+    questions.value = [] // Set to an empty array if quiz creation fails
   } finally {
     loading.value = false
   }

@@ -10,7 +10,7 @@
       <button @click="navigateToCreateQuiz" class="create-quiz-btn">
         Create New Quiz
       </button>
-      <button @click="createGroup" class="create-group-btn">
+      <button @click="promptCreateGroup" class="create-group-btn">
         Create New Group
       </button>
     </div>
@@ -109,18 +109,17 @@
           </div>
         </div>
         <template v-else>
-          <div
-            v-if="group.quizzes.length > 0"
-            class="quiz-card p-4 bg-white rounded-lg shadow-md relative"
-          >
-            <h3 class="font-semibold text-lg">{{ group.quizzes[0].title }}</h3>
-            <p class="text-sm text-gray-600 mb-4">
-              Topic: {{ group.quizzes[0].topic }}
-            </p>
+          <div v-if="group.quizzes.length > 0" class="quiz-list">
+            <ul>
+              <li
+                v-for="quiz in group.quizzes"
+                :key="quiz.id"
+                class="text-gray-700 mb-2"
+              >
+                - {{ quiz.title }}
+              </li>
+            </ul>
           </div>
-          <p v-if="group.quizzes.length > 1" class="text-gray-500">
-            + {{ group.quizzes.length - 1 }} more quizzes
-          </p>
           <p v-else class="text-gray-500">No quizzes in this group.</p>
         </template>
       </div>
@@ -199,27 +198,30 @@ const ungroupedQuizzes = ref([])
 const selectedQuizId = ref(null)
 const draggedQuiz = ref(null)
 const expandedGroups = ref([])
+
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
+// Fetch groups and ungrouped quizzes when component mounts
 onMounted(async () => {
   try {
     await fetchGroups()
     await fetchUngroupedQuizzes()
-    console.log(groups.value) // Add this to verify group data with quizzes
   } catch (error) {
     console.error('Error loading initial data:', error)
   }
 })
 
+// Fetch groups from backend
 const fetchGroups = async () => {
   try {
     const response = await axios.get(`${apiBaseUrl}/groups/`)
-    groups.value = response.data // The quizzes should already be present within each group
+    groups.value = response.data
   } catch (error) {
     console.error('Error fetching groups:', error)
   }
 }
 
+// Fetch ungrouped quizzes from backend
 const fetchUngroupedQuizzes = async () => {
   try {
     const response = await axios.get(`${apiBaseUrl}/quizzes/?grouped=false`)
@@ -229,67 +231,114 @@ const fetchUngroupedQuizzes = async () => {
   }
 }
 
+// Prompt for creating a new group
+const promptCreateGroup = () => {
+  const name = prompt('Enter the name for the new group:')
+  if (name && name.trim() !== '') {
+    createGroup(name.trim())
+  }
+}
+
+// Create a new group
+const createGroup = async name => {
+  try {
+    const response = await axios.post(`${apiBaseUrl}/groups/`, {
+      name: name,
+    })
+    groups.value.push(response.data)
+  } catch (error) {
+    console.error('Error creating group:', error)
+    alert('Failed to create a new group. Please try again.')
+  }
+}
+
+// Rename a group with inline editing
+
+// Delete a group
+const deleteGroup = async groupId => {
+  if (
+    confirm(
+      'Are you sure you want to delete this group? All quizzes in this group will be ungrouped.',
+    )
+  ) {
+    try {
+      await axios.delete(`${apiBaseUrl}/groups/${groupId}/`)
+
+      const groupIndex = groups.value.findIndex(group => group.id === groupId)
+      if (groupIndex !== -1) {
+        const quizzesToUngroup = groups.value[groupIndex].quizzes
+        groups.value.splice(groupIndex, 1)
+
+        ungroupedQuizzes.value.push(...quizzesToUngroup) // Move quizzes back to ungroupedQuizzes
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error)
+      alert('Failed to delete the group. Please try again.')
+    }
+  }
+}
+
+// Handle quiz drag start
 const handleDragStart = (quiz, group, index = null) => {
   draggedQuiz.value = { quiz, group, index }
 }
 
+// Handle dropping a quiz into a group
 const handleDrop = async targetGroup => {
   if (!draggedQuiz.value) return
 
   const { quiz, group, index } = draggedQuiz.value
 
-  // Remove quiz from the original location
   if (group) {
     group.quizzes = group.quizzes.filter(q => q.id !== quiz.id)
   } else {
     ungroupedQuizzes.value.splice(index, 1)
   }
 
-  // Add quiz to the new group or back to ungrouped quizzes
   if (targetGroup) {
     targetGroup.quizzes.push(quiz)
   } else {
     ungroupedQuizzes.value.push(quiz)
   }
 
-  // Update backend to persist the change
   try {
-    await axios.put(`${apiBaseUrl}/move-quiz-to-group/${quiz.id}/`, {
+    await axios.put(`${apiBaseUrl}/quizzes/${quiz.id}/move-to-group/`, {
       group_id: targetGroup ? targetGroup.id : null,
     })
   } catch (error) {
     console.error('Error updating quiz group:', error)
+    alert('Failed to move the quiz. Please try again.')
   }
 
-  // Reset dragged data
   draggedQuiz.value = null
 }
 
+// Handle dropping a quiz within ungrouped quizzes to reorder
 const handleQuizDrop = async targetIndex => {
   if (!draggedQuiz.value || draggedQuiz.value.group !== null) return
 
   const { quiz, index } = draggedQuiz.value
 
-  // Update the order locally in the frontend
   ungroupedQuizzes.value.splice(index, 1)
   ungroupedQuizzes.value.splice(targetIndex, 0, quiz)
 
-  // Update the backend to reflect the new order
   const quizOrders = ungroupedQuizzes.value.map((quiz, idx) => ({
     id: quiz.id,
     order: idx,
   }))
   try {
-    await axios.put(`${apiBaseUrl}/update-quiz-order/`, {
+    await axios.put(`${apiBaseUrl}/quizzes/update-order/`, {
       quiz_orders: quizOrders,
     })
   } catch (error) {
     console.error('Error updating quiz order:', error)
+    alert('Failed to update quiz order. Please try again.')
   }
 
   draggedQuiz.value = null
 }
 
+// Expand or collapse a group
 const toggleGroupExpand = groupId => {
   if (expandedGroups.value.includes(groupId)) {
     expandedGroups.value = expandedGroups.value.filter(id => id !== groupId)
@@ -298,34 +347,29 @@ const toggleGroupExpand = groupId => {
   }
 }
 
+// Toggle more options for quizzes
 const toggleMoreOptions = quizId => {
-  if (selectedQuizId.value === quizId) {
-    selectedQuizId.value = null
-  } else {
-    selectedQuizId.value = quizId
-  }
+  selectedQuizId.value = selectedQuizId.value === quizId ? null : quizId
 }
 
+// Navigate to create a new quiz
 const navigateToCreateQuiz = () => {
   router.push({ name: 'CreateQuiz' })
 }
 
-const createGroup = () => {
-  // Logic to create a new group
-  console.log('Creating a new group')
-  // Add group creation logic here
-}
-
+// Edit a quiz
 const editQuiz = quizId => {
   router.push({ name: 'EditQuiz', params: { id: quizId } })
 }
 
+// Duplicate a quiz
 const duplicateQuiz = async quizId => {
   try {
     const response = await axios.post(
       `${apiBaseUrl}/quizzes/${quizId}/duplicate/`,
     )
     const duplicatedQuiz = response.data
+
     const group = groups.value.find(g => g.quizzes.some(q => q.id === quizId))
     if (group) {
       group.quizzes.push(duplicatedQuiz)
@@ -334,48 +378,54 @@ const duplicateQuiz = async quizId => {
     }
   } catch (error) {
     console.error('Error duplicating quiz:', error)
+    alert('Failed to duplicate quiz. Please try again.')
   }
 }
 
+// Delete a quiz
 const deleteQuiz = async quizId => {
-  try {
-    await axios.delete(`${apiBaseUrl}/quizzes/${quizId}/`)
-    const group = groups.value.find(g => g.quizzes.some(q => q.id === quizId))
-    if (group) {
-      group.quizzes = group.quizzes.filter(q => q.id !== quizId)
-    } else {
-      ungroupedQuizzes.value = ungroupedQuizzes.value.filter(
-        q => q.id !== quizId,
-      )
+  if (confirm('Are you sure you want to delete this quiz?')) {
+    try {
+      await axios.delete(`${apiBaseUrl}/quizzes/${quizId}/`)
+      const group = groups.value.find(g => g.quizzes.some(q => q.id === quizId))
+      if (group) {
+        group.quizzes = group.quizzes.filter(q => q.id !== quizId)
+      } else {
+        ungroupedQuizzes.value = ungroupedQuizzes.value.filter(
+          q => q.id !== quizId,
+        )
+      }
+    } catch (error) {
+      console.error('Error deleting quiz:', error)
+      alert('Failed to delete quiz. Please try again.')
     }
-  } catch (error) {
-    console.error('Error deleting quiz:', error)
   }
 }
 
+// Share a quiz
 const shareQuiz = async quizId => {
-  // Logic for sharing a quiz
   alert(
     `Shareable link for quiz ${quizId}: http://localhost:5173/quiz/${quizId}`,
   )
 }
 
+// Navigate to a quiz for testing
 const navigateToQuiz = quizId => {
   router.push({ name: 'TestQuiz', params: { id: quizId } })
 }
 
+// Ungroup a quiz
 const ungroupQuiz = async (quiz, group) => {
-  // Remove quiz from the group
   group.quizzes = group.quizzes.filter(q => q.id !== quiz.id)
   ungroupedQuizzes.value.push(quiz)
 
-  // Update backend to persist the change
   try {
-    await axios.put(`${apiBaseUrl}/move-quiz-to-group/${quiz.id}/`, {
+    await axios.put(`${apiBaseUrl}/quizzes/${quiz.id}/move-to-group/`, {
       group_id: null,
     })
   } catch (error) {
     console.error('Error ungrouping quiz:', error)
+    alert('Failed to ungroup quiz. Please try again.')
   }
 }
 </script>
@@ -422,5 +472,9 @@ const ungroupQuiz = async (quiz, group) => {
 
 .option-item {
   @apply block w-full text-left mb-2;
+}
+
+.quiz-list {
+  @apply bg-white p-3 rounded-lg shadow-md;
 }
 </style>

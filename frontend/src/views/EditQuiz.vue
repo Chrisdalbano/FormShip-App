@@ -276,12 +276,11 @@ const updateQuiz = async () => {
       question_time_limit,
     })
 
-    // Prepare updated questions
     for (const question of questions) {
       const questionData = {
         question_text: question.question_text,
-        option_a: question.option_a,
-        option_b: question.option_b,
+        option_a: question.option_a || null,
+        option_b: question.option_b || null,
         option_c: question.option_c || null,
         option_d: question.option_d || null,
         option_e: question.option_e || null,
