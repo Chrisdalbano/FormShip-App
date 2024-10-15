@@ -29,6 +29,8 @@ class QuizSerializer(serializers.ModelSerializer):
             "is_timed",
             "question_time_limit",
             "questions",
+            "skippable_questions",
+            "segment_steps",
         ]
 
 

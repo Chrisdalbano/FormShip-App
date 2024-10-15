@@ -29,8 +29,64 @@
         />
       </div>
 
-      <!-- Timer Settings -->
+      <!-- Quiz Type Selection -->
       <div class="mb-4">
+        <label for="quizType" class="block text-lg font-semibold mb-2"
+          >Quiz Type</label
+        >
+        <select
+          v-model="quiz.quiz_type"
+          id="quizType"
+          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+        >
+          <option value="standard">Standard Quiz</option>
+          <option value="stepwise">Stepwise Quiz</option>
+        </select>
+      </div>
+
+      <!-- Stepwise Quiz Specific Settings -->
+      <div v-if="quiz.quiz_type === 'stepwise'">
+        <div class="mb-4">
+          <label
+            for="skippableQuestions"
+            class="block text-lg font-semibold mb-2"
+            >Allow Questions to be Skipped?</label
+          >
+          <input
+            type="checkbox"
+            v-model="quiz.skippable_questions"
+            id="skippableQuestions"
+          />
+        </div>
+
+        <div class="mb-4">
+          <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
+            >Set Time Limit for Each Question?</label
+          >
+          <input
+            type="checkbox"
+            v-model="quiz.time_per_question"
+            id="timePerQuestion"
+          />
+          <div v-if="quiz.time_per_question" class="mt-4">
+            <label
+              for="questionTimeLimit"
+              class="block text-lg font-semibold mb-2"
+              >Time Limit per Question (in seconds)</label
+            >
+            <input
+              type="number"
+              v-model="quiz.question_time_limit"
+              min="5"
+              id="questionTimeLimit"
+              class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Timer Settings for Standard Quiz -->
+      <div v-if="quiz.quiz_type === 'standard'" class="mb-4">
         <label for="isTimed" class="block text-lg font-semibold mb-2"
           >Set Time Limit for Quiz?</label
         >
@@ -44,31 +100,6 @@
             v-model="quiz.quiz_time_limit"
             min="1"
             id="quizTimeLimit"
-            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
-          />
-        </div>
-      </div>
-
-      <div class="mb-4">
-        <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
-          >Set Time Limit for Each Question?</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.time_per_question"
-          id="timePerQuestion"
-        />
-        <div v-if="quiz.time_per_question" class="mt-4">
-          <label
-            for="questionTimeLimit"
-            class="block text-lg font-semibold mb-2"
-            >Time Limit per Question (in seconds)</label
-          >
-          <input
-            type="number"
-            v-model="quiz.question_time_limit"
-            min="5"
-            id="questionTimeLimit"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
           />
         </div>
@@ -219,6 +250,8 @@ const quiz = ref({
   quiz_time_limit: null,
   time_per_question: false,
   question_time_limit: null,
+  quiz_type: 'standard', // default quiz type
+  skippable_questions: false, // default for stepwise
 })
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -257,6 +290,8 @@ const updateQuiz = async () => {
       quiz_time_limit,
       time_per_question,
       question_time_limit,
+      quiz_type,
+      skippable_questions,
     } = quiz.value
 
     await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, {
@@ -264,7 +299,7 @@ const updateQuiz = async () => {
       topic,
       difficulty: quiz.value.difficulty, // Ensure all necessary fields are passed
       question_count: questions.length,
-      quiz_type: quiz.value.quiz_type, // Add any additional properties needed by backend
+      quiz_type,
       display_results,
       require_password,
       password,
@@ -274,6 +309,7 @@ const updateQuiz = async () => {
       quiz_time_limit,
       time_per_question,
       question_time_limit,
+      skippable_questions,
     })
 
     for (const question of questions) {

@@ -86,6 +86,45 @@
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
         />
       </div>
+      <!-- Quiz Type Selection -->
+      <div class="mb-4">
+        <label for="quizType" class="block text-lg font-semibold mb-2"
+          >Select Quiz Type</label
+        >
+        <select
+          v-model="quizType"
+          id="quizType"
+          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+        >
+          <option value="standard">
+            Standard Quiz (All Questions at Once)
+          </option>
+          <option value="stepwise">
+            Stepwise Quiz (One Question at a Time)
+          </option>
+        </select>
+      </div>
+      <!-- Stepwise Quiz Options -->
+      <div v-if="quizType === 'stepwise'" class="mb-4">
+        <label for="allowSkipping" class="block text-lg font-semibold mb-2"
+          >Allow Skipping Questions?</label
+        >
+        <input type="checkbox" v-model="allowSkipping" id="allowSkipping" />
+        <div v-if="!allowSkipping" class="mt-4">
+          <label
+            for="stepwiseTimeLimit"
+            class="block text-lg font-semibold mb-2"
+            >Set Time Limit for Each Step (in seconds)</label
+          >
+          <input
+            type="number"
+            v-model="stepwiseTimeLimit"
+            min="5"
+            id="stepwiseTimeLimit"
+            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          />
+        </div>
+      </div>
       <!-- Timer Options -->
       <div class="mb-4">
         <label for="isTimed" class="block text-lg font-semibold mb-2"
@@ -105,7 +144,7 @@
           />
         </div>
       </div>
-      <div class="mb-4">
+      <div class="mb-4" v-if="quizType === 'standard'">
         <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
           >Set Time Limit for Each Question (in seconds)</label
         >
@@ -233,6 +272,9 @@ const isTimed = ref(false)
 const quizTimeLimit = ref(null)
 const timePerQuestion = ref(false)
 const questionTimeLimit = ref(null)
+const quizType = ref('standard') // Default quiz type is standard
+const allowSkipping = ref(false)
+const stepwiseTimeLimit = ref(null)
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
@@ -267,6 +309,12 @@ const createQuiz = async () => {
       question_time_limit: timePerQuestion.value
         ? questionTimeLimit.value
         : null,
+      quiz_type: quizType.value,
+      allow_skipping: allowSkipping.value,
+      stepwise_time_limit:
+        quizType.value === 'stepwise' && !allowSkipping.value
+          ? stepwiseTimeLimit.value
+          : null,
     }
 
     if (useKnowledgeBase.value) {

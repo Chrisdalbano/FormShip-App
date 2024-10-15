@@ -1,7 +1,6 @@
-<!-- eslint-disable no-undef -->
 <template>
   <div class="zen-container">
-    <h1>Test Quiz</h1>
+    <h1>{{ quiz_type === 'stepwise' ? 'Stepwise Quiz' : 'Test Quiz' }}</h1>
 
     <!-- Password Prompt if Required -->
     <div
@@ -60,74 +59,164 @@
           Time Remaining: {{ formattedQuizTime }}
         </p>
       </div>
-      <div
-        v-for="(question, index) in quiz.questions"
-        :key="index"
-        class="question-block"
-      >
-        <p>{{ index + 1 }}. {{ question.question_text }}</p>
-        <div>
-          <label v-if="question.option_a">
-            <input
-              type="radio"
-              :name="'question' + index"
-              value="A"
-              v-model="userAnswers[index]"
-            />
-            A. {{ question.option_a }}
-          </label>
-          <label v-if="question.option_b">
-            <input
-              type="radio"
-              :name="'question' + index"
-              value="B"
-              v-model="userAnswers[index]"
-            />
-            B. {{ question.option_b }}
-          </label>
-          <label v-if="question.option_c">
-            <input
-              type="radio"
-              :name="'question' + index"
-              value="C"
-              v-model="userAnswers[index]"
-            />
-            C. {{ question.option_c }}
-          </label>
-          <label v-if="question.option_d">
-            <input
-              type="radio"
-              :name="'question' + index"
-              value="D"
-              v-model="userAnswers[index]"
-            />
-            D. {{ question.option_d }}
-          </label>
-          <label v-if="question.option_e">
-            <input
-              type="radio"
-              :name="'question' + index"
-              value="E"
-              v-model="userAnswers[index]"
-            />
-            E. {{ question.option_e }}
-          </label>
-        </div>
-        <div
-          v-if="quiz.time_per_question && questionTimers[index] > 0"
-          class="mt-2"
-        >
-          <p class="text-red-600">
-            Time Remaining for Question: {{ formattedQuestionTime(index) }}
+
+      <!-- Stepwise Mode -->
+      <div v-if="quiz_type === 'stepwise'" class="stepwise-quiz">
+        <div class="question-block">
+          <p>
+            {{ currentQuestionIndex + 1 }}. {{ currentQuestion.question_text }}
           </p>
+          <div>
+            <label v-if="currentQuestion.option_a">
+              <input
+                type="radio"
+                :name="'question' + currentQuestionIndex"
+                value="A"
+                v-model="userAnswers[currentQuestionIndex]"
+              />
+              A. {{ currentQuestion.option_a }}
+            </label>
+            <label v-if="currentQuestion.option_b">
+              <input
+                type="radio"
+                :name="'question' + currentQuestionIndex"
+                value="B"
+                v-model="userAnswers[currentQuestionIndex]"
+              />
+              B. {{ currentQuestion.option_b }}
+            </label>
+            <label v-if="currentQuestion.option_c">
+              <input
+                type="radio"
+                :name="'question' + currentQuestionIndex"
+                value="C"
+                v-model="userAnswers[currentQuestionIndex]"
+              />
+              C. {{ currentQuestion.option_c }}
+            </label>
+            <label v-if="currentQuestion.option_d">
+              <input
+                type="radio"
+                :name="'question' + currentQuestionIndex"
+                value="D"
+                v-model="userAnswers[currentQuestionIndex]"
+              />
+              D. {{ currentQuestion.option_d }}
+            </label>
+            <label v-if="currentQuestion.option_e">
+              <input
+                type="radio"
+                :name="'question' + currentQuestionIndex"
+                value="E"
+                v-model="userAnswers[currentQuestionIndex]"
+              />
+              E. {{ currentQuestion.option_e }}
+            </label>
+          </div>
+          <div v-if="quiz.time_per_question && questionTimer > 0" class="mt-2">
+            <p class="text-red-600">
+              Time Remaining for Question: {{ formattedQuestionTime }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="navigation-buttons mt-4">
+          <button
+            @click="goToNextQuestion"
+            class="bg-blue-500 text-white px-4 py-2 rounded"
+            :disabled="!canAdvanceToNext"
+          >
+            Next
+          </button>
+          <button
+            v-if="currentQuestionIndex > 0"
+            @click="goToPreviousQuestion"
+            class="bg-gray-500 text-white px-4 py-2 rounded ml-2"
+          >
+            Previous
+          </button>
+          <button
+            v-if="isLastQuestion"
+            @click="submitAnswers"
+            class="bg-green-500 text-white px-4 py-2 rounded ml-2"
+          >
+            Submit Answers
+          </button>
         </div>
       </div>
-      <button
-        @click="submitAnswers"
-        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-      >
-        Submit Answers
-      </button>
+
+      <!-- All-at-Once Mode -->
+      <div v-else class="all-at-once-quiz">
+        <div
+          v-for="(question, index) in quiz.questions"
+          :key="index"
+          class="question-block"
+        >
+          <p>{{ index + 1 }}. {{ question.question_text }}</p>
+          <div>
+            <label v-if="question.option_a">
+              <input
+                type="radio"
+                :name="'question' + index"
+                value="A"
+                v-model="userAnswers[index]"
+              />
+              A. {{ question.option_a }}
+            </label>
+            <label v-if="question.option_b">
+              <input
+                type="radio"
+                :name="'question' + index"
+                value="B"
+                v-model="userAnswers[index]"
+              />
+              B. {{ question.option_b }}
+            </label>
+            <label v-if="question.option_c">
+              <input
+                type="radio"
+                :name="'question' + index"
+                value="C"
+                v-model="userAnswers[index]"
+              />
+              C. {{ question.option_c }}
+            </label>
+            <label v-if="question.option_d">
+              <input
+                type="radio"
+                :name="'question' + index"
+                value="D"
+                v-model="userAnswers[index]"
+              />
+              D. {{ question.option_d }}
+            </label>
+            <label v-if="question.option_e">
+              <input
+                type="radio"
+                :name="'question' + index"
+                value="E"
+                v-model="userAnswers[index]"
+              />
+              E. {{ question.option_e }}
+            </label>
+          </div>
+          <div
+            v-if="quiz.time_per_question && questionTimers[index] > 0"
+            class="mt-2"
+          >
+            <p class="text-red-600">
+              Time Remaining for Question: {{ formattedQuestionTime(index) }}
+            </p>
+          </div>
+        </div>
+        <button
+          @click="submitAnswers"
+          class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+        >
+          Submit Answers
+        </button>
+      </div>
     </div>
 
     <!-- Loading State -->
@@ -164,8 +253,8 @@ const quiz = ref(null)
 const userAnswers = ref([])
 const score = ref(0)
 const showResults = ref(false)
-
 const quizId = route.params.id
+const quiz_type = ref('all-at-once') // default to all-at-once mode
 
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
@@ -182,6 +271,13 @@ const userNameProvided = ref(!quiz.value?.require_name)
 // Timer States
 const quizTimeRemaining = ref(null)
 const questionTimers = ref([])
+let questionTimer = ref(0) // Timer for current question in stepwise mode
+
+// Stepwise Quiz State
+const currentQuestionIndex = ref(0)
+const currentQuestion = computed(
+  () => quiz.value?.questions[currentQuestionIndex.value],
+)
 
 let quizStartTime = null
 
@@ -192,6 +288,8 @@ onMounted(async () => {
     userAnswers.value = Array(response.data.questions.length).fill(null)
     passwordValidated.value = !quiz.value.require_password
     userNameProvided.value = !quiz.value.require_name
+    quiz_type.value =
+      quiz.value.quiz_type === 'stepwise' ? 'stepwise' : 'all-at-once'
 
     if (quiz.value.is_timed && quiz.value.quiz_time_limit) {
       quizTimeRemaining.value = quiz.value.quiz_time_limit * 60
@@ -199,10 +297,15 @@ onMounted(async () => {
       startQuizTimer()
     }
     if (quiz.value.time_per_question && quiz.value.question_time_limit) {
-      questionTimers.value = Array(response.data.questions.length).fill(
-        quiz.value.question_time_limit,
-      )
-      startQuestionTimers()
+      if (quiz_type.value === 'all-at-once') {
+        questionTimers.value = Array(response.data.questions.length).fill(
+          quiz.value.question_time_limit,
+        )
+        startQuestionTimers()
+      } else if (quiz_type.value === 'stepwise') {
+        questionTimer.value = quiz.value.question_time_limit
+        startCurrentQuestionTimer()
+      }
     }
   } catch (error) {
     console.error('Error fetching quiz:', error)
@@ -227,17 +330,48 @@ const startQuestionTimers = () => {
         questionTimers.value[index]--
       } else {
         clearInterval(timer)
-        nextQuestion(index)
+        goToNextQuestion(index)
       }
     }, 1000)
   })
 }
 
-const nextQuestion = currentIndex => {
-  if (currentIndex < quiz.value.questions.length - 1) {
-    document
-      .querySelector(`[name='question${currentIndex + 1}']`)
-      .scrollIntoView({ behavior: 'smooth' })
+const startCurrentQuestionTimer = () => {
+  const timer = setInterval(() => {
+    if (questionTimer.value > 0) {
+      questionTimer.value--
+    } else {
+      clearInterval(timer)
+      // eslint-disable-next-line vue/no-ref-as-operand
+      if (!canAdvanceToNext) {
+        alert(
+          'Time is up for this question, but you cannot skip this question.',
+        )
+      } else {
+        goToNextQuestion()
+      }
+    }
+  }, 1000)
+}
+
+const goToNextQuestion = () => {
+  // eslint-disable-next-line vue/no-ref-as-operand
+  if (canAdvanceToNext) {
+    currentQuestionIndex.value++
+    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
+      questionTimer.value = quiz.value.question_time_limit
+      startCurrentQuestionTimer()
+    }
+  }
+}
+
+const goToPreviousQuestion = () => {
+  if (currentQuestionIndex.value > 0) {
+    currentQuestionIndex.value--
+    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
+      questionTimer.value = quiz.value.question_time_limit
+      startCurrentQuestionTimer()
+    }
   }
 }
 
@@ -255,6 +389,7 @@ const submitName = () => {
     userNameProvided.value = true
   }
 }
+
 const submitAnswers = async () => {
   calculateScore()
   showResults.value = true
@@ -308,12 +443,22 @@ const formattedQuizTime = computed(() => {
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
 })
 
-const formattedQuestionTime = index => {
-  const seconds = questionTimers.value[index]
-  return `${Math.floor(seconds / 60)}:${seconds % 60 < 10 ? '0' : ''}${
-    seconds % 60
-  }`
-}
+const formattedQuestionTime = computed(() => {
+  const minutes = Math.floor(questionTimer.value / 60)
+  const seconds = questionTimer.value % 60
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
+})
+
+const canAdvanceToNext = computed(() => {
+  return (
+    userAnswers[currentQuestionIndex.value] !== null ||
+    (quiz.value.allow_skip && questionTimer.value === 0)
+  )
+})
+
+const isLastQuestion = computed(() => {
+  return currentQuestionIndex.value === quiz.value.questions.length - 1
+})
 </script>
 
 <style scoped>
