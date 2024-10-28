@@ -24,9 +24,16 @@ client = OpenAI(
 def list_quizzes(request):
     quizzes = Quiz.objects.all()
     group_id = request.query_params.get("group_id", None)
+    grouped = request.query_params.get("grouped", None)
 
     if group_id:
         quizzes = quizzes.filter(group__id=group_id)
+        
+    if grouped is not None:
+        if grouped.lower() == "false" or "null":
+            quizzes = quizzes.filter(group__isnull=True)
+        elif grouped.lower() == "true":
+            quizzes.quizzes.filter(group__isnull=False)
 
     serializer = QuizSerializer(quizzes, many=True)
     return Response(serializer.data)

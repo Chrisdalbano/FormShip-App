@@ -35,17 +35,18 @@ def create_group(request):
 
 @api_view(["GET", "PUT", "DELETE"])
 def group_detail(request, group_id):
-    try:
-        group = Group.objects.get(pk=group_id)
-    except Group.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
+    """
+    Handles retrieving, updating (name and color), and deleting a group.
+    """
+    group = get_object_or_404(Group, pk=group_id)
 
     if request.method == "GET":
         serializer = GroupSerializer(group)
         return Response(serializer.data)
 
     elif request.method == "PUT":
-        serializer = GroupSerializer(group, data=request.data)
+        # Allow partial updates for name and color fields
+        serializer = GroupSerializer(group, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
