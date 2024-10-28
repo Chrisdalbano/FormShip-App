@@ -1,5 +1,3 @@
-// composables/useGroupApi.js
-
 import { ref } from 'vue'
 import axios from 'axios'
 

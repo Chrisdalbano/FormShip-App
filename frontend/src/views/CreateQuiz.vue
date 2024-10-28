@@ -10,7 +10,7 @@
           >Quiz Title</label
         >
         <input
-          v-model="quizTitle"
+          v-model="quiz.title"
           type="text"
           id="title"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
@@ -22,7 +22,7 @@
           >Topic</label
         >
         <input
-          v-model="quizTopic"
+          v-model="quiz.topic"
           type="text"
           id="topic"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
@@ -35,7 +35,7 @@
         >
         <input
           type="number"
-          v-model="questionCount"
+          v-model="quiz.question_count"
           min="2"
           max="5"
           id="questionCount"
@@ -49,7 +49,7 @@
         >
         <input
           type="number"
-          v-model="optionCount"
+          v-model="quiz.option_count"
           min="2"
           max="5"
           id="optionCount"
@@ -63,18 +63,18 @@
         >
         <input
           type="checkbox"
-          v-model="useKnowledgeBase"
+          v-model="quiz.use_knowledge_base"
           id="useKnowledgeBase"
           class="mr-2"
         />
         <span>Yes, use my provided information to generate the quiz.</span>
       </div>
-      <div v-if="useKnowledgeBase" class="mb-4">
+      <div v-if="quiz.use_knowledge_base" class="mb-4">
         <label for="knowledgeBaseInput" class="block text-lg font-semibold mb-2"
           >Knowledge Base Input (Text or Upload File)</label
         >
         <textarea
-          v-model="knowledgeBaseText"
+          v-model="quiz.knowledge_base_text"
           id="knowledgeBaseInput"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mb-4"
           rows="5"
@@ -92,7 +92,7 @@
           >Select Quiz Type</label
         >
         <select
-          v-model="quizType"
+          v-model="quiz.quiz_type"
           id="quizType"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
         >
@@ -105,12 +105,16 @@
         </select>
       </div>
       <!-- Stepwise Quiz Options -->
-      <div v-if="quizType === 'stepwise'" class="mb-4">
+      <div v-if="quiz.quiz_type === 'stepwise'" class="mb-4">
         <label for="allowSkipping" class="block text-lg font-semibold mb-2"
           >Allow Skipping Questions?</label
         >
-        <input type="checkbox" v-model="allowSkipping" id="allowSkipping" />
-        <div v-if="!allowSkipping" class="mt-4">
+        <input
+          type="checkbox"
+          v-model="quiz.allow_skipping"
+          id="allowSkipping"
+        />
+        <div v-if="!quiz.allow_skipping" class="mt-4">
           <label
             for="stepwiseTimeLimit"
             class="block text-lg font-semibold mb-2"
@@ -118,7 +122,7 @@
           >
           <input
             type="number"
-            v-model="stepwiseTimeLimit"
+            v-model="quiz.stepwise_time_limit"
             min="5"
             id="stepwiseTimeLimit"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
@@ -130,26 +134,30 @@
         <label for="isTimed" class="block text-lg font-semibold mb-2"
           >Set Time Limit for Quiz?</label
         >
-        <input type="checkbox" v-model="isTimed" id="isTimed" />
-        <div v-if="isTimed" class="mt-4">
+        <input type="checkbox" v-model="quiz.is_timed" id="isTimed" />
+        <div v-if="quiz.is_timed" class="mt-4">
           <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
             >Total Time Limit for Quiz (in minutes)</label
           >
           <input
             type="number"
-            v-model="quizTimeLimit"
+            v-model="quiz.quiz_time_limit"
             min="1"
             id="quizTimeLimit"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
           />
         </div>
       </div>
-      <div class="mb-4" v-if="quizType === 'standard'">
+      <div class="mb-4" v-if="quiz.quiz_type === 'standard'">
         <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
           >Set Time Limit for Each Question (in seconds)</label
         >
-        <input type="checkbox" v-model="timePerQuestion" id="timePerQuestion" />
-        <div v-if="timePerQuestion" class="mt-4">
+        <input
+          type="checkbox"
+          v-model="quiz.time_per_question"
+          id="timePerQuestion"
+        />
+        <div v-if="quiz.time_per_question" class="mt-4">
           <label
             for="questionTimeLimit"
             class="block text-lg font-semibold mb-2"
@@ -157,7 +165,7 @@
           >
           <input
             type="number"
-            v-model="questionTimeLimit"
+            v-model="quiz.question_time_limit"
             min="5"
             id="questionTimeLimit"
             class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
@@ -169,17 +177,25 @@
         <label for="displayResults" class="block text-lg font-semibold mb-2"
           >Display Results After Quiz?</label
         >
-        <input type="checkbox" v-model="displayResults" id="displayResults" />
+        <input
+          type="checkbox"
+          v-model="quiz.display_results"
+          id="displayResults"
+        />
       </div>
       <div class="mb-4">
         <label for="requirePassword" class="block text-lg font-semibold mb-2"
           >Require Password to Access Quiz?</label
         >
-        <input type="checkbox" v-model="requirePassword" id="requirePassword" />
         <input
-          v-if="requirePassword"
+          type="checkbox"
+          v-model="quiz.require_password"
+          id="requirePassword"
+        />
+        <input
+          v-if="quiz.require_password"
           type="password"
-          v-model="password"
+          v-model="quiz.password"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mt-2"
           placeholder="Enter password"
         />
@@ -188,13 +204,17 @@
         <label for="allowAnonymous" class="block text-lg font-semibold mb-2"
           >Allow Anonymous Users?</label
         >
-        <input type="checkbox" v-model="allowAnonymous" id="allowAnonymous" />
+        <input
+          type="checkbox"
+          v-model="quiz.allow_anonymous"
+          id="allowAnonymous"
+        />
       </div>
       <div class="mb-4">
         <label for="requireName" class="block text-lg font-semibold mb-2"
           >Require Name/Nickname?</label
         >
-        <input type="checkbox" v-model="requireName" id="requireName" />
+        <input type="checkbox" v-model="quiz.require_name" id="requireName" />
       </div>
       <button
         type="submit"
@@ -239,9 +259,16 @@
       <button
         @click="goToEditPage"
         type="button"
-        class="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+        class="bg-yellow-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
       >
         Edit Quiz
+      </button>
+      <button
+        @click="goToTestQuiz"
+        type="button"
+        class="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+      >
+        Test Quiz
       </button>
     </div>
   </div>
@@ -253,37 +280,41 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const quizTitle = ref('')
-const quizTopic = ref('')
-const questionCount = ref(2) // Default to 2 questions
-const optionCount = ref(2) // Default to 2 options per question
-const useKnowledgeBase = ref(false)
-const knowledgeBaseText = ref('')
+const loading = ref(false)
 const questions = ref([])
 let createdQuizId = null
-const loading = ref(false)
 
-const displayResults = ref(true)
-const requirePassword = ref(false)
-const password = ref('')
-const allowAnonymous = ref(false)
-const requireName = ref(false)
-const isTimed = ref(false)
-const quizTimeLimit = ref(null)
-const timePerQuestion = ref(false)
-const questionTimeLimit = ref(null)
-const quizType = ref('standard') // Default quiz type is standard
-const allowSkipping = ref(false)
-const stepwiseTimeLimit = ref(null)
+// Define a single reactive object to store all quiz details
+const quiz = ref({
+  title: '',
+  topic: '',
+  question_count: 2, // Default to 2 questions
+  option_count: 2, // Default to 2 options per question
+  use_knowledge_base: false,
+  knowledge_base_text: '',
+  display_results: true,
+  require_password: false,
+  password: '',
+  allow_anonymous: false,
+  require_name: false,
+  is_timed: false,
+  quiz_time_limit: null,
+  time_per_question: false,
+  question_time_limit: null,
+  quiz_type: 'standard', // Default quiz type is standard
+  skippable_questions: false,
+  stepwise_time_limit: null,
+})
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
+// Handle file upload
 const handleFileUpload = event => {
   const file = event.target.files[0]
   if (file) {
     const reader = new FileReader()
     reader.onload = e => {
-      knowledgeBaseText.value = e.target.result
+      quiz.value.knowledge_base_text = e.target.result
     }
     reader.readAsText(file)
   }
@@ -292,33 +323,37 @@ const handleFileUpload = event => {
 const createQuiz = async () => {
   loading.value = true
   try {
+    // Construct the requestData based on the quiz object
     const requestData = {
-      title: quizTitle.value,
-      topic: quizTopic.value,
-      question_count: questionCount.value,
-      option_count: optionCount.value,
+      title: quiz.value.title,
+      topic: quiz.value.topic,
+      question_count: quiz.value.question_count,
+      option_count: quiz.value.option_count,
       difficulty: 'medium',
-      display_results: displayResults.value,
-      require_password: requirePassword.value,
-      password: requirePassword.value ? password.value : null,
-      allow_anonymous: allowAnonymous.value,
-      require_name: requireName.value,
-      is_timed: isTimed.value,
-      quiz_time_limit: isTimed.value ? quizTimeLimit.value : null,
-      time_per_question: timePerQuestion.value,
-      question_time_limit: timePerQuestion.value
-        ? questionTimeLimit.value
+      display_results: quiz.value.display_results,
+      require_password: quiz.value.require_password,
+      password: quiz.value.require_password ? quiz.value.password : null,
+      allow_anonymous: quiz.value.allow_anonymous,
+      require_name: quiz.value.require_name,
+      is_timed: quiz.value.is_timed,
+      quiz_time_limit: quiz.value.is_timed ? quiz.value.quiz_time_limit : null,
+      time_per_question: quiz.value.time_per_question,
+      question_time_limit: quiz.value.time_per_question
+        ? quiz.value.question_time_limit
         : null,
-      quiz_type: quizType.value,
-      allow_skipping: allowSkipping.value,
+      quiz_type: quiz.value.quiz_type, // Ensure quiz_type is correctly set
+      allow_skipping:
+        quiz.value.quiz_type === 'stepwise'
+          ? quiz.value.skippable_questions
+          : null,
       stepwise_time_limit:
-        quizType.value === 'stepwise' && !allowSkipping.value
-          ? stepwiseTimeLimit.value
+        quiz.value.quiz_type === 'stepwise' && !quiz.value.skippable_questions
+          ? quiz.value.stepwise_time_limit
           : null,
     }
 
-    if (useKnowledgeBase.value) {
-      requestData.knowledge_base = knowledgeBaseText.value
+    if (quiz.value.use_knowledge_base) {
+      requestData.knowledge_base = quiz.value.knowledge_base_text
     }
 
     const response = await axios.post(
@@ -346,6 +381,14 @@ const createQuiz = async () => {
 const goToEditPage = () => {
   if (createdQuizId) {
     router.push({ name: 'EditQuiz', params: { id: createdQuizId } })
+  } else {
+    alert('No quiz has been created yet.')
+  }
+}
+
+const goToTestQuiz = () => {
+  if (createdQuizId) {
+    router.push({ name: 'TestQuiz', params: { id: createdQuizId } })
   } else {
     alert('No quiz has been created yet.')
   }

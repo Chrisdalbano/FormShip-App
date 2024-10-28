@@ -6,7 +6,7 @@
     @dragover.prevent
     @drop="handleGroupDrop"
   >
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex justify-between items-center flex-col mb-4">
       <div class="flex items-center">
         <h3 class="font-bold text-xl cursor-pointer" @click="toggleGroupExpand">
           {{ group.name }}
@@ -86,5 +86,14 @@ const onUpdateColor = () => emit('update-color', props.group)
 <style scoped>
 .group-card {
   @apply p-4 rounded-lg shadow-md;
+}
+
+.group-options-button {
+  font-size: 0.9rem;
+  background-color: rgb(145, 145, 145);
+  padding-block: 0.5rem;
+  padding-inline: 0.25rem;
+  border-radius: 0.5rem;
+  color:white;
 }
 </style>

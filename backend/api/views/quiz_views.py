@@ -28,7 +28,7 @@ def list_quizzes(request):
 
     if group_id:
         quizzes = quizzes.filter(group__id=group_id)
-        
+
     if grouped is not None:
         if grouped.lower() == "false" or "null":
             quizzes = quizzes.filter(group__isnull=True)
@@ -67,6 +67,15 @@ def create_quiz(request):
             if time_per_question
             else None
         )
+        quiz_type = request.data.get(
+            "quiz_type", "multiple-choice"
+        )  # Extract quiz type
+        skippable_questions = request.data.get(
+            "skippable_questions", True
+        )  # Default to True
+        segment_steps = request.data.get(
+            "segment_steps", False
+        )  # Extract segment_steps for stepwise
 
         # Validate title and topic
         if not title or not topic:
@@ -123,6 +132,9 @@ def create_quiz(request):
             quiz_time_limit=quiz_time_limit,
             time_per_question=time_per_question,
             question_time_limit=question_time_limit,
+            quiz_type=quiz_type,  # Correctly set quiz type from the request
+            skippable_questions=skippable_questions,  # Add skippable questions for stepwise
+            segment_steps=segment_steps,  # Set if the quiz is segmented by steps (one question at a time)
         )
 
         # Create question instances and attach to the quiz
