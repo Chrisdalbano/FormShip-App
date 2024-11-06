@@ -1,6 +1,9 @@
 <template>
   <div class="zen-container">
-    <h1 class="text-3xl font-bold mb-4">Your Quiz Dashboard</h1>
+    <h1 class="text-3xl font-bold mb-4">
+      Hello! Welcome to Your Quiz Dashboard
+    </h1>
+
     <p class="text-lg mb-6">
       Create a new quiz or manage your existing quizzes below.
     </p>
