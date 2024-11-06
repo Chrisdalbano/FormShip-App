@@ -1,6 +1,7 @@
 // store/auth.js
 import { defineStore } from 'pinia'
 import axios from 'axios'
+// import AuthView from '@/views/AuthView.vue'
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -28,11 +29,13 @@ export const useAuthStore = defineStore('auth', {
                 }
             }
         },
-        logout() {
+        logout(router) {
             this.token = null
             this.user = null
             localStorage.removeItem('jwt')
+            router.push('/auth')  // Use router to redirect
         },
+
         async ssoLogin(provider) {
             // Placeholder for SSO integration
             console.log(`Logging in with ${provider}...`)

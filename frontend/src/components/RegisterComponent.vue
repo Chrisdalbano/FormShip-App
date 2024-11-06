@@ -12,7 +12,7 @@
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
-      <div class="mb-4">
+      <!-- <div class="mb-4">
         <label class="block text-gray-700">First Name</label>
         <input
           type="text"
@@ -29,8 +29,8 @@
           placeholder="Last Name"
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-      </div>
-      <div class="mb-4">
+      </div> -->
+      <!-- <div class="mb-4">
         <label class="block text-gray-700">Company</label>
         <input
           type="text"
@@ -49,9 +49,8 @@
           <option value="ecommerce">eCommerce</option>
           <option value="education">Education</option>
           <option value="medical">Medical</option>
-          <!-- Add more options here as needed -->
         </select>
-      </div>
+      </div> -->
       <div class="mb-4">
         <label class="block text-gray-700">Password</label>
         <input
@@ -124,10 +123,10 @@ export default {
           'http://localhost:8000/api/users/register/',
           {
             email: this.email,
-            first_name: this.first_name,
-            last_name: this.last_name,
-            company: this.company,
-            organization_type: this.organization_type,
+            // first_name: this.first_name,
+            // last_name: this.last_name,
+            // company: this.company,
+            // organization_type: this.organization_type,
             password: this.password,
           },
         )

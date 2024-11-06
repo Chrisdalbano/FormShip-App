@@ -1,9 +1,7 @@
 <template>
   <div id="app">
-    <header class="app-header">
-      <h1 class="font-bold text-white text-3xl">Inteqra</h1>
-      <NavbarComponent />
-    </header>
+    <NavbarComponent />
+
     <main>
       <router-view />
     </main>

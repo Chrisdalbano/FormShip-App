@@ -1,6 +1,7 @@
 <template>
   <div class="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-lg">
-    <h2 class="text-2xl font-semibold mb-4 text-center">Log In</h2>
+    <h2 class="text-2xl font-semibold mb-4 text-center">Log in to Inteqra
+    </h2>
     <form @submit.prevent="login">
       <div class="mb-4">
         <label class="block text-gray-700">Email</label>
