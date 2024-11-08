@@ -13,18 +13,20 @@
           v-model="quiz.title"
           type="text"
           id="title"
+          placeholder="Name your quiz"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
           required
         />
       </div>
       <div class="mb-4">
         <label for="topic" class="block text-lg font-semibold mb-2"
-          >Topic</label
+          >About the quiz</label
         >
         <input
           v-model="quiz.topic"
           type="text"
           id="topic"
+          placeholder="Provide details about the quiz for faster generation (AI)"
           class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
           required
         />
@@ -45,7 +47,7 @@
       </div>
       <div class="mb-4">
         <label for="optionCount" class="block text-lg font-semibold mb-2"
-          >Number of Options per Question</label
+          >Number of Answer Options per Question</label
         >
         <input
           type="number"
@@ -256,20 +258,22 @@
         </ul>
         <p><strong>Correct Answer:</strong> {{ question.correct_answer }}</p>
       </div>
-      <button
-        @click="goToEditPage"
-        type="button"
-        class="bg-yellow-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
-      >
-        Edit Quiz
-      </button>
-      <button
-        @click="goToTestQuiz"
-        type="button"
-        class="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
-      >
-        Test Quiz
-      </button>
+      <div class="space-y-2">
+        <button
+          @click="goToEditPage"
+          type="button"
+          class="bg-yellow-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+        >
+          Edit Quiz
+        </button>
+        <button
+          @click="goToTestQuiz"
+          type="button"
+          class="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+        >
+          Test Quiz
+        </button>
+      </div>
     </div>
   </div>
 </template>

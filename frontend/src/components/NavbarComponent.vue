@@ -24,7 +24,7 @@
           <!-- Dropdown Menu -->
           <div
             v-if="showDropdown"
-            class="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded-lg shadow-lg"
+            class="absolute right-0 mt-2 w-48 bg-white [&>*]:text-gray-800 rounded-lg shadow-lg"
           >
             <router-link
               @click="closeDropdown"
@@ -66,47 +66,27 @@
   </nav>
 </template>
 
-<script>
+<script setup>
 import { useAuthStore } from '../store/auth'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-export default {
-  setup() {
-    const authStore = useAuthStore()
-    const router = useRouter()
-    const showDropdown = ref(false)
+const authStore = useAuthStore()
+const router = useRouter()
+const showDropdown = ref(false)
 
-    const toggleDropdown = () => {
-      showDropdown.value = !showDropdown.value
-    }
+const toggleDropdown = () => {
+  showDropdown.value = !showDropdown.value
+}
 
-    const closeDropdown = () => {
-      showDropdown.value = false
-    }
+const closeDropdown = () => {
+  showDropdown.value = false
+}
 
-    const logout = () => {
-      authStore.logout(router)
-      closeDropdown()
-    }
-
-    return {
-      authStore,
-      showDropdown,
-      toggleDropdown,
-      closeDropdown,
-      logout,
-    }
-  },
+const logout = () => {
+  authStore.logout(router)
+  closeDropdown()
 }
 </script>
 
-<style scoped>
-nav a {
-  @apply text-white hover:text-blue-200;
-}
-
-nav button {
-  @apply text-white hover:text-blue-200;
-}
-</style>
+<style scoped></style>
