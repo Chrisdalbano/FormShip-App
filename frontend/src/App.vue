@@ -10,10 +10,16 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
+import { useAuthStore } from './store/auth'
 import NavbarComponent from './components/NavbarComponent.vue'
 import FooterComponent from './components/FooterComponent.vue'
 
-// No additional script for the App component is needed
+const authStore = useAuthStore()
+
+onMounted(() => {
+  authStore.initializeAuth() // Restore authentication state on app load
+})
 </script>
 
 <style scoped>

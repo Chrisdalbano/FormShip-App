@@ -1,5 +1,6 @@
 from django.urls import path
 from ..views.user_views import (
+    change_password,
     submit_quiz_results,
     get_quiz_result,
     register_user,
@@ -16,5 +17,6 @@ urlpatterns = [
     path("login/", MyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("profile/", user_profile, name="user-profile"),
-    path("me/", user_profile, name="user-profile-update"),  # Add this line
+    path("me/", user_profile, name="user-profile-update"),
+    path("change-password/", change_password, name="change-password"),
 ]

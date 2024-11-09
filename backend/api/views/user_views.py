@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from ..models.user import UserResult
 from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.hashers import check_password
+
 
 from ..models.quiz import Quiz
 from ..serializers.user_serializer import (
@@ -17,6 +19,36 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 User = get_user_model()
 
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    user = request.user
+    current_password = request.data.get("old_password")
+    new_password = request.data.get("new_password")
+    confirm_new_password = request.data.get("confirm_new_password")
+
+    # Check if the current password matches
+    if not check_password(current_password, user.password):
+        return Response(
+            {"error": "Current password is incorrect."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Check if the new password and confirmation match
+    if new_password != confirm_new_password:
+        return Response(
+            {"error": "New passwords do not match."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Update the password
+    user.set_password(new_password)
+    user.save()
+
+    return Response(
+        {"message": "Password updated successfully."},
+        status=status.HTTP_200_OK
+    )
 
 @api_view(["GET", "PUT"])
 @permission_classes([IsAuthenticated])

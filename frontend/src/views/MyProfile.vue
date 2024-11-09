@@ -104,6 +104,15 @@
       <h3 class="text-xl font-semibold mb-4">Update Password</h3>
       <form @submit.prevent="updatePassword">
         <div class="mb-4">
+          <label class="block text-gray-700">Current Password</label>
+          <input
+            v-model="oldPassword"
+            class="input-field"
+            type="password"
+            required
+          />
+        </div>
+        <div class="mb-4">
           <label class="block text-gray-700">New Password</label>
           <input
             v-model="newPassword"
@@ -138,10 +147,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '../store/auth'
 import Modal from '../components/EditPopModal.vue'
+import axios from 'axios'
 
 const authStore = useAuthStore()
 const loading = ref(true)
@@ -151,6 +160,7 @@ const last_name = ref('')
 const organization_type = ref('')
 const newEmail = ref('')
 const currentPassword = ref('')
+const oldPassword = ref('')
 const newPassword = ref('')
 const confirmNewPassword = ref('')
 const showEmailModal = ref(false)
@@ -167,36 +177,28 @@ const passwordMismatch = computed(
     newPassword.value !== confirmNewPassword.value,
 )
 
-const fetchUserProfile = async () => {
-  try {
-    loading.value = true
-    const response = await axios.get(`${apiBaseUrl}/user/profile/`, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    const userData = response.data
-    email.value = userData.email || ''
-    first_name.value = userData.first_name || ''
-    last_name.value = userData.last_name || ''
-    organization_type.value = userData.organization_type || ''
-  } catch (error) {
-    console.error('Failed to fetch user profile:', error)
-  } finally {
-    loading.value = false
-  }
-}
+// Watch authStore.user to update local fields when it changes
+watch(
+  () => authStore.user,
+  user => {
+    if (user) {
+      email.value = user.email || ''
+      first_name.value = user.first_name || ''
+      last_name.value = user.last_name || ''
+      organization_type.value = user.organization_type || ''
+    }
+  },
+  { immediate: true },
+)
 
 const updateProfile = async () => {
   try {
     isSaving.value = true
-    await axios.put(
-      `${apiBaseUrl}/users/me/`, // Make sure this matches your updated route
-      {
-        first_name: first_name.value,
-        last_name: last_name.value,
-        organization_type: organization_type.value,
-      },
-      { headers: { Authorization: `Bearer ${authStore.token}` } },
-    )
+    await authStore.updateUserDetails({
+      first_name: first_name.value,
+      last_name: last_name.value,
+      organization_type: organization_type.value,
+    })
     alert('Profile updated successfully')
   } catch (error) {
     console.error('Failed to update profile:', error)
@@ -206,55 +208,47 @@ const updateProfile = async () => {
   }
 }
 
-const openEmailModal = () => (showEmailModal.value = true)
-const closeEmailModal = () => (showEmailModal.value = false)
-const openPasswordModal = () => (showPasswordModal.value = true)
-const closePasswordModal = () => (showPasswordModal.value = false)
-
-const updateEmail = async () => {
-  try {
-    emailUpdating.value = true
-    await axios.put(
-      `${apiBaseUrl}/users/change-email/`,
-      {
-        new_email: newEmail.value,
-        current_password: currentPassword.value,
-      },
-      { headers: { Authorization: `Bearer ${authStore.token}` } },
-    )
-    email.value = newEmail.value
-    alert('Email updated successfully')
-    closeEmailModal()
-  } catch (error) {
-    console.error('Failed to update email:', error)
-    alert('Failed to update email')
-  } finally {
-    emailUpdating.value = false
-  }
-}
-
 const updatePassword = async () => {
+  if (passwordMismatch.value) {
+    alert('Passwords do not match')
+    return
+  }
+
   try {
     passwordUpdating.value = true
-    await axios.put(
-      `${apiBaseUrl}/users/change-password/`,
+    const response = await axios.put(
+      `${apiBaseUrl}/user/change-password/`,
       {
-        new_password: newPassword.value,
-        confirm_new_password: confirmNewPassword.value,
+        old_password: oldPassword.value, // Current password
+        new_password: newPassword.value, // New password
+        confirm_new_password: confirmNewPassword.value, // Confirm new password
       },
       { headers: { Authorization: `Bearer ${authStore.token}` } },
     )
-    alert('Password updated successfully')
+
+    alert(response.data.message) // Use the response message
     closePasswordModal()
   } catch (error) {
     console.error('Failed to update password:', error)
-    alert('Failed to update password')
+    alert(
+      error.response && error.response.data
+        ? error.response.data.error
+        : 'Failed to update password',
+    )
   } finally {
     passwordUpdating.value = false
   }
 }
 
-onMounted(() => fetchUserProfile())
+const openEmailModal = () => (showEmailModal.value = true)
+const closeEmailModal = () => (showEmailModal.value = false)
+const openPasswordModal = () => (showPasswordModal.value = true)
+const closePasswordModal = () => (showPasswordModal.value = false)
+
+onMounted(() => {
+  authStore.initializeAuth() // Ensure user data is loaded
+  loading.value = false
+})
 </script>
 
 <style scoped>

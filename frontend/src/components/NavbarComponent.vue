@@ -17,8 +17,12 @@
     <div>
       <template v-if="authStore.isAuthenticated">
         <div class="relative inline-block text-left">
-          <button @click="toggleDropdown" class="focus:outline-none text-white">
-            Account ▼
+          <button
+            ref="displayUser"
+            @click="toggleDropdown"
+            class="focus:outline-none text-white"
+          >
+            {{ displayUser }}
           </button>
 
           <!-- Dropdown Menu -->
@@ -68,12 +72,22 @@
 
 <script setup>
 import { useAuthStore } from '../store/auth'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const showDropdown = ref(false)
+
+const displayUser = computed(() => {
+  if (authStore.user?.first_name) {
+    return authStore.user.first_name
+  } else if (authStore.user?.email) {
+    return authStore.user.email
+  } else {
+    return 'Account'
+  }
+})
 
 const toggleDropdown = () => {
   showDropdown.value = !showDropdown.value
