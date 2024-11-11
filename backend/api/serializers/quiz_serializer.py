@@ -25,13 +25,24 @@ class QuizSerializer(serializers.ModelSerializer):
             "quiz_type",
             "created_at",
             "quiz_time_limit",
+            "are_questions_timed",  # New field
             "time_per_question",
             "is_timed",
-            "question_time_limit",
             "questions",
             "skippable_questions",
             "segment_steps",
         ]
+
+    def validate(self, data):
+        if data.get("require_password") and not data.get("password"):
+            raise serializers.ValidationError(
+                "Password is required if 'require_password' is True."
+            )
+        if data.get("are_questions_timed") and not data.get("time_per_question"):
+            raise serializers.ValidationError(
+                "Time per question is required if 'are_questions_timed' is True."
+            )
+        return data
 
 
 class SharedQuizSerializer(serializers.ModelSerializer):

@@ -19,15 +19,11 @@ class Quiz(models.Model):
     quiz_type = models.CharField(max_length=50, default="multiple-choice")
     created_at = models.DateTimeField(auto_now_add=True)
     quiz_time_limit = models.IntegerField(null=True, blank=True)  # in minutes
+    are_questions_timed = models.BooleanField(default=False)  # New field
     time_per_question = models.IntegerField(null=True, blank=True)  # in seconds
     is_timed = models.BooleanField(default=False)
-    question_time_limit = models.IntegerField(null=True, blank=True)  # Add this line
-    skippable_questions = models.BooleanField(
-        default=True
-    )  # Allows skipping questions in a stepwise quiz
-    segment_steps = models.BooleanField(
-        default=False
-    )  # Indicates if the quiz is segmented by steps (one question at a time)
+    skippable_questions = models.BooleanField(default=True)
+    segment_steps = models.BooleanField(default=False)
 
     def __str__(self):
         return self.title

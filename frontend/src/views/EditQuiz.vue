@@ -50,8 +50,9 @@
           <label
             for="skippableQuestions"
             class="block text-lg font-semibold mb-2"
-            >Allow Questions to be Skipped?</label
           >
+            Allow Questions to be Skipped?
+          </label>
           <input
             type="checkbox"
             v-model="quiz.skippable_questions"
@@ -60,25 +61,29 @@
         </div>
 
         <div class="mb-4">
-          <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
-            >Set Time Limit for Each Question?</label
+          <label
+            for="areQuestionsTimed"
+            class="block text-lg font-semibold mb-2"
           >
+            Set Time Limit for Each Question?
+          </label>
           <input
             type="checkbox"
-            v-model="quiz.time_per_question"
-            id="timePerQuestion"
+            v-model="quiz.are_questions_timed"
+            id="areQuestionsTimed"
           />
-          <div v-if="quiz.time_per_question" class="mt-4">
+          <div v-if="quiz.are_questions_timed" class="mt-4">
             <label
-              for="questionTimeLimit"
+              for="timePerQuestion"
               class="block text-lg font-semibold mb-2"
-              >Time Limit per Question (in seconds)</label
             >
+              Time Limit per Question (in seconds)
+            </label>
             <input
               type="number"
-              v-model="quiz.question_time_limit"
+              v-model.number="quiz.time_per_question"
               min="5"
-              id="questionTimeLimit"
+              id="timePerQuestion"
               class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
             />
           </div>
@@ -92,9 +97,9 @@
         >
         <input type="checkbox" v-model="quiz.is_timed" id="isTimed" />
         <div v-if="quiz.is_timed" class="mt-4">
-          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
-            >Total Time Limit for Quiz (in minutes)</label
-          >
+          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2">
+            Total Time Limit for Quiz (in minutes)
+          </label>
           <input
             type="number"
             v-model="quiz.quiz_time_limit"
@@ -150,6 +155,7 @@
         <input type="checkbox" v-model="quiz.require_name" id="requireName" />
       </div>
 
+      <!-- Questions Section -->
       <div
         v-for="(question, index) in quiz.questions"
         :key="question.id || index"
@@ -248,15 +254,14 @@ const quiz = ref({
   require_name: false,
   is_timed: false,
   quiz_time_limit: null,
-  time_per_question: false,
-  question_time_limit: null,
-  quiz_type: 'standard', // default quiz type
-  skippable_questions: false, // default for stepwise
+  are_questions_timed: false,
+  time_per_question: null,
+  quiz_type: 'standard',
+  skippable_questions: false,
 })
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-// Option configuration
 const optionsConfig = [
   { label: 'Option A', field: 'option_a' },
   { label: 'Option B', field: 'option_b' },
@@ -276,57 +281,46 @@ onMounted(async () => {
 
 const updateQuiz = async () => {
   try {
-    // Update quiz details
-    const {
-      title,
-      topic,
-      questions,
-      display_results,
-      require_password,
-      password,
-      allow_anonymous,
-      require_name,
-      is_timed,
-      quiz_time_limit,
-      time_per_question,
-      question_time_limit,
-      quiz_type,
-      skippable_questions,
-    } = quiz.value
+    const payload = {
+      title: quiz.value.title || '',
+      topic: quiz.value.topic || '',
+      difficulty: quiz.value.difficulty || 'medium',
+      question_count: quiz.value.questions.length,
+      quiz_type: quiz.value.quiz_type || 'standard',
+      display_results: quiz.value.display_results,
+      require_password: quiz.value.require_password,
+      password: quiz.value.require_password ? quiz.value.password || '' : '',
+      allow_anonymous: quiz.value.allow_anonymous,
+      require_name: quiz.value.require_name,
+      is_timed: quiz.value.is_timed,
+      quiz_time_limit: quiz.value.is_timed ? quiz.value.quiz_time_limit : null,
+      are_questions_timed: quiz.value.are_questions_timed,
+      time_per_question: quiz.value.are_questions_timed
+        ? quiz.value.time_per_question
+        : null,
+      skippable_questions: quiz.value.skippable_questions,
+    }
 
-    await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, {
-      title,
-      topic,
-      difficulty: quiz.value.difficulty, // Ensure all necessary fields are passed
-      question_count: questions.length,
-      quiz_type,
-      display_results,
-      require_password,
-      password,
-      allow_anonymous,
-      require_name,
-      is_timed,
-      quiz_time_limit,
-      time_per_question,
-      question_time_limit,
-      skippable_questions,
-    })
+    // eslint-disable-next-line no-unused-vars
+    const response = await axios.put(
+      `${apiBaseUrl}/quizzes/${quizId}/`,
+      payload,
+    )
 
-    for (const question of questions) {
+    for (const question of quiz.value.questions) {
       const questionData = {
-        question_text: question.question_text,
+        question_text: question.question_text || '',
         option_a: question.option_a || null,
         option_b: question.option_b || null,
         option_c: question.option_c || null,
         option_d: question.option_d || null,
         option_e: question.option_e || null,
-        correct_answer: question.correct_answer,
+        correct_answer: question.correct_answer || 'A',
       }
+
       if (question.id) {
-        // Update existing question
         await axios.put(`${apiBaseUrl}/questions/${question.id}/`, questionData)
       } else {
-        // Create new question
         questionData.quiz = quizId
         await axios.post(
           `${apiBaseUrl}/quizzes/${quizId}/questions/`,
@@ -356,12 +350,10 @@ const addQuestion = () => {
   })
 }
 
-// Adjust number of options displayed based on user selection
 const adjustOptions = question => {
-  question.option_count = Math.max(2, Math.min(question.option_count, 5)) // Clamp between 2 and 5
+  question.option_count = Math.max(2, Math.min(question.option_count, 5))
 }
 
-// Compute visible options based on user's selection
 const visibleOptions = question => {
   return optionsConfig.slice(0, question.option_count)
 }

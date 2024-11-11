@@ -2,7 +2,7 @@
   <div class="zen-container">
     <h1>{{ quiz_type === 'stepwise' ? 'Stepwise Quiz' : 'Test Quiz' }}</h1>
 
-    <!-- Password Prompt if Required -->
+    <!-- Password Prompt -->
     <div
       v-if="quiz && quiz.require_password && !passwordValidated && !showResults"
     >
@@ -11,20 +11,17 @@
         type="password"
         v-model="enteredPassword"
         placeholder="Enter password"
-        class="border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+        class="input-field"
       />
-      <button
-        @click="validatePassword"
-        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-      >
+      <button @click="validatePassword" class="action-button">
         Submit Password
       </button>
-      <p v-if="passwordError" class="text-red-500 mt-2">
+      <p v-if="passwordError" class="error-text">
         Incorrect password. Please try again.
       </p>
     </div>
 
-    <!-- Name/Nickname Prompt if Required -->
+    <!-- Name Prompt -->
     <div
       v-else-if="quiz && quiz.require_name && !userNameProvided && !showResults"
     >
@@ -33,31 +30,20 @@
         type="text"
         v-model="userName"
         placeholder="Enter your name"
-        class="border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+        class="input-field"
       />
-      <button
-        @click="submitName"
-        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-      >
-        Submit Name
-      </button>
+      <button @click="submitName" class="action-button">Submit Name</button>
     </div>
 
     <!-- Quiz Content -->
     <div
-      v-if="
-        quiz &&
-        (!quiz.require_password || passwordValidated) &&
-        (!quiz.require_name || userNameProvided) &&
-        !showResults
-      "
+      v-else-if="quiz && !showResults && passwordValidated && userNameProvided"
     >
       <h2>{{ quiz.title }}</h2>
       <p>Topic: {{ quiz.topic }}</p>
+
       <div v-if="quiz.is_timed && quizTimeRemaining > 0">
-        <p class="font-semibold text-red-500">
-          Time Remaining: {{ formattedQuizTime }}
-        </p>
+        <p class="timer-text">Time Remaining: {{ formattedQuizTime }}</p>
       </div>
 
       <!-- Stepwise Mode -->
@@ -130,7 +116,7 @@
             Next
           </button>
           <button
-            v-if="currentQuestionIndex > 0"
+            v-if="currentQuestionIndex > 0 && !quiz.time_per_question"
             @click="goToPreviousQuestion"
             class="bg-gray-500 text-white px-4 py-2 rounded ml-2"
           >
@@ -201,14 +187,6 @@
               E. {{ question.option_e }}
             </label>
           </div>
-          <div
-            v-if="quiz.time_per_question && questionTimers[index] > 0"
-            class="mt-2"
-          >
-            <p class="text-red-600">
-              Time Remaining for Question: {{ formattedQuestionTime(index) }}
-            </p>
-          </div>
         </div>
         <button
           @click="submitAnswers"
@@ -224,20 +202,13 @@
 
     <!-- Results Section -->
     <div v-if="showResults">
-      <h2>Quiz Completed!</h2>
-      <div v-if="quiz.display_results">
-        <p>Your Score: {{ score }} / {{ totalQuestions }}</p>
-        <ResultsView
-          :score="score"
-          :totalQuestions="totalQuestions"
-          :questions="quiz.questions"
-          :userAnswers="userAnswers"
-          :xpEarned="calculateXPEarned(score)"
-        />
-      </div>
-      <div v-else>
-        <p>Thank you for completing the quiz!</p>
-      </div>
+      <ResultsView
+        :score="score"
+        :totalQuestions="totalQuestions"
+        :questions="quiz.questions"
+        :userAnswers="userAnswers"
+        :xpEarned="calculateXPEarned(score)"
+      />
     </div>
   </div>
 </template>
@@ -254,32 +225,25 @@ const userAnswers = ref([])
 const score = ref(0)
 const showResults = ref(false)
 const quizId = route.params.id
-const quiz_type = ref('all-at-once') // default to all-at-once mode
+const quiz_type = ref('all-at-once')
 
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
-// State for Password Requirement
-const passwordValidated = ref(!quiz.value?.require_password)
+// Password and Name State
+const passwordValidated = ref(false)
 const enteredPassword = ref('')
 const passwordError = ref(false)
-
-// State for Name Requirement
 const userName = ref('')
-const userNameProvided = ref(!quiz.value?.require_name)
+const userNameProvided = ref(false)
 
 // Timer States
-const quizTimeRemaining = ref(null)
-const questionTimers = ref([])
-let questionTimer = ref(0) // Timer for current question in stepwise mode
-
-// Stepwise Quiz State
+const quizTimeRemaining = ref(0)
+let questionTimer = ref(0)
 const currentQuestionIndex = ref(0)
 const currentQuestion = computed(
-  () => quiz.value?.questions[currentQuestionIndex.value],
+  () => quiz.value.questions[currentQuestionIndex.value],
 )
-
-let quizStartTime = null
 
 onMounted(async () => {
   try {
@@ -291,21 +255,13 @@ onMounted(async () => {
     quiz_type.value =
       quiz.value.quiz_type === 'stepwise' ? 'stepwise' : 'all-at-once'
 
-    if (quiz.value.is_timed && quiz.value.quiz_time_limit) {
+    if (quiz.value.is_timed) {
       quizTimeRemaining.value = quiz.value.quiz_time_limit * 60
-      quizStartTime = new Date()
       startQuizTimer()
     }
-    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
-      if (quiz_type.value === 'all-at-once') {
-        questionTimers.value = Array(response.data.questions.length).fill(
-          quiz.value.question_time_limit,
-        )
-        startQuestionTimers()
-      } else if (quiz_type.value === 'stepwise') {
-        questionTimer.value = quiz.value.question_time_limit
-        startCurrentQuestionTimer()
-      }
+    if (quiz.value.time_per_question) {
+      questionTimer.value = quiz.value.time_per_question
+      startQuestionTimer()
     }
   } catch (error) {
     console.error('Error fetching quiz:', error)
@@ -323,56 +279,19 @@ const startQuizTimer = () => {
   }, 1000)
 }
 
-const startQuestionTimers = () => {
-  questionTimers.value.forEach((_, index) => {
-    const timer = setInterval(() => {
-      if (questionTimers.value[index] > 0) {
-        questionTimers.value[index]--
-      } else {
-        clearInterval(timer)
-        goToNextQuestion(index)
-      }
-    }, 1000)
-  })
-}
-
-const startCurrentQuestionTimer = () => {
+const startQuestionTimer = () => {
   const timer = setInterval(() => {
     if (questionTimer.value > 0) {
       questionTimer.value--
     } else {
       clearInterval(timer)
-      // eslint-disable-next-line vue/no-ref-as-operand
-      if (!canAdvanceToNext) {
-        alert(
-          'Time is up for this question, but you cannot skip this question.',
-        )
-      } else {
+      if (!isLastQuestion.value) {
         goToNextQuestion()
+      } else {
+        submitAnswers()
       }
     }
   }, 1000)
-}
-
-const goToNextQuestion = () => {
-  // eslint-disable-next-line vue/no-ref-as-operand
-  if (canAdvanceToNext) {
-    currentQuestionIndex.value++
-    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
-      questionTimer.value = quiz.value.question_time_limit
-      startCurrentQuestionTimer()
-    }
-  }
-}
-
-const goToPreviousQuestion = () => {
-  if (currentQuestionIndex.value > 0) {
-    currentQuestionIndex.value--
-    if (quiz.value.time_per_question && quiz.value.question_time_limit) {
-      questionTimer.value = quiz.value.question_time_limit
-      startCurrentQuestionTimer()
-    }
-  }
 }
 
 const validatePassword = () => {
@@ -385,58 +304,41 @@ const validatePassword = () => {
 }
 
 const submitName = () => {
-  if (userName.value.trim() !== '') {
+  if (userName.value.trim()) {
     userNameProvided.value = true
   }
 }
 
-const submitAnswers = async () => {
+const goToNextQuestion = () => {
+  if (currentQuestionIndex.value < quiz.value.questions.length - 1) {
+    currentQuestionIndex.value++
+    if (quiz.value.time_per_question) {
+      questionTimer.value = quiz.value.time_per_question
+      startQuestionTimer()
+    }
+  }
+}
+
+// Updated: Prevent going back if the questions are timed
+const goToPreviousQuestion = () => {
+  if (currentQuestionIndex.value > 0 && !quiz.value.time_per_question) {
+    currentQuestionIndex.value--
+  }
+}
+
+const submitAnswers = () => {
   calculateScore()
   showResults.value = true
-
-  const userAnswersDict = {}
-  quiz.value.questions.forEach((question, index) => {
-    userAnswersDict[question.id] = userAnswers.value[index]
-  })
-
-  const requestData = {
-    quiz_id: quiz.value.id,
-    user_name: userName.value.trim() ? userName.value : 'Anonymous',
-    user_answers: userAnswersDict,
-    quiz_start_time: quizStartTime?.toISOString(),
-  }
-
-  console.log('Submitting request data:', requestData)
-
-  try {
-    const response = await axios.post(
-      `${apiBaseUrl}/submit-quiz-results/`,
-      requestData,
-    )
-    if (response.status === 201) {
-      console.log('Quiz results successfully submitted')
-    }
-  } catch (error) {
-    console.error('Error submitting quiz results:', error)
-  }
 }
 
 const calculateScore = () => {
-  let calculatedScore = 0
-  quiz.value.questions.forEach((question, index) => {
-    if (userAnswers.value[index] === question.correct_answer) {
-      calculatedScore++
-    }
-  })
-  score.value = calculatedScore
+  score.value = userAnswers.value.filter(
+    (answer, index) => answer === quiz.value.questions[index].correct_answer,
+  ).length
 }
 
-const calculateXPEarned = score => {
-  // Assuming XP earned is proportional to the score
-  return score * 10 // You can adjust this logic as needed
-}
+const calculateXPEarned = score => score * 10 // Adjust XP logic as needed
 
-// eslint-disable-next-line no-undef
 const formattedQuizTime = computed(() => {
   const minutes = Math.floor(quizTimeRemaining.value / 60)
   const seconds = quizTimeRemaining.value % 60
@@ -449,33 +351,47 @@ const formattedQuestionTime = computed(() => {
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
 })
 
-const canAdvanceToNext = computed(() => {
-  return (
-    userAnswers[currentQuestionIndex.value] !== null ||
-    (quiz.value.allow_skip && questionTimer.value === 0)
-  )
-})
-
 const isLastQuestion = computed(() => {
   return currentQuestionIndex.value === quiz.value.questions.length - 1
+})
+
+const canAdvanceToNext = computed(() => {
+  return userAnswers[currentQuestionIndex.value] !== null
 })
 </script>
 
 <style scoped>
-.question-block {
-  margin-bottom: 1rem;
-}
-
-.results {
-  margin-top: 2rem;
-}
-
 .zen-container {
   max-width: 800px;
   margin: auto;
 }
-
-.button {
-  margin-top: 10px;
+.input-field {
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 5px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.action-button {
+  background-color: #3490dc;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+}
+.action-button:hover {
+  background-color: #2779bd;
+}
+.timer-text {
+  font-weight: bold;
+  color: red;
+}
+.question-block {
+  margin-bottom: 20px;
+}
+.error-text {
+  color: red;
+  font-size: 14px;
 }
 </style>
