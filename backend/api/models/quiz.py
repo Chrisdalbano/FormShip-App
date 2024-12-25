@@ -24,6 +24,8 @@ class Quiz(models.Model):
     is_timed = models.BooleanField(default=False)
     skippable_questions = models.BooleanField(default=True)
     segment_steps = models.BooleanField(default=False)
+    allow_previous_questions = models.BooleanField(default=False)  # New field
+
 
     def __str__(self):
         return self.title

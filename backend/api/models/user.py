@@ -34,6 +34,36 @@ class UserResult(models.Model):
 class Account(models.Model):
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+    subscription_plan = models.CharField(max_length=100, default="Free Plan")
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="AccountMembership", related_name="accounts"
+    )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="owned_accounts",
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, through="AccountMembership", related_name="accounts"
+    )
+
+    def transfer_ownership(self, new_owner):
+        self.owner = new_owner
+        self.save()
+
+
+class AccountMembership(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    role = models.CharField(
+        max_length=50,
+        choices=[("owner", "Owner"), ("admin", "Admin"), ("member", "Member")],
+        default="member",
+    )
+    invited_at = models.DateTimeField(auto_now_add=True)
+    joined_at = models.DateTimeField(null=True, blank=True)
+    last_connected = models.DateTimeField(null=True, blank=True)
 
 
 class UserManager(BaseUserManager):
@@ -60,8 +90,6 @@ class UserManager(BaseUserManager):
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
-    # Remove the username field entirely
-
     first_name = models.CharField(max_length=50, blank=True, null=True)
     last_name = models.CharField(max_length=50, blank=True, null=True)
     company = models.CharField(max_length=255, blank=True, null=True)
@@ -75,10 +103,11 @@ class User(AbstractUser):
         blank=True,
         null=True,
     )
-    account = models.ForeignKey(
-        "Account", on_delete=models.CASCADE, null=True, blank=True
-    )
-    is_owner = models.BooleanField(default=False)
+    # account = models.ForeignKey(
+    #     Account, on_delete=models.CASCADE, null=True, blank=True
+    # )
+
+    # is_owner = models.BooleanField(default=False)
 
     groups = models.ManyToManyField(
         Group,

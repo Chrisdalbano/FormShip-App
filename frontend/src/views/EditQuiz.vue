@@ -45,7 +45,7 @@
       </div>
 
       <!-- Stepwise Quiz Specific Settings -->
-      <div v-if="quiz.quiz_type === 'stepwise'">
+      <div v-if="quiz.quiz_type === 'stepwise'" class="mb-4">
         <div class="mb-4">
           <label
             for="skippableQuestions"
@@ -57,6 +57,17 @@
             type="checkbox"
             v-model="quiz.skippable_questions"
             id="skippableQuestions"
+          />
+        </div>
+
+        <div class="mb-4">
+          <label for="allowPrevious" class="block text-lg font-semibold mb-2">
+            Allow Going Back to Previous Questions?
+          </label>
+          <input
+            type="checkbox"
+            v-model="quiz.allow_previous_questions"
+            id="allowPrevious"
           />
         </div>
 
@@ -97,9 +108,9 @@
         >
         <input type="checkbox" v-model="quiz.is_timed" id="isTimed" />
         <div v-if="quiz.is_timed" class="mt-4">
-          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2">
-            Total Time Limit for Quiz (in minutes)
-          </label>
+          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
+            >Total Time Limit for Quiz (in minutes)</label
+          >
           <input
             type="number"
             v-model="quiz.quiz_time_limit"
@@ -258,6 +269,7 @@ const quiz = ref({
   time_per_question: null,
   quiz_type: 'standard',
   skippable_questions: false,
+  allow_previous_questions: false, // New field for allowing navigation to previous questions
 })
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
@@ -274,6 +286,9 @@ onMounted(async () => {
   try {
     const response = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`)
     quiz.value = response.data
+    quiz.value.questions.forEach(question => {
+      question.option_count = calculateOptionCount(question)
+    })
   } catch (error) {
     console.error('Error fetching quiz:', error)
   }
@@ -299,6 +314,7 @@ const updateQuiz = async () => {
         ? quiz.value.time_per_question
         : null,
       skippable_questions: quiz.value.skippable_questions,
+      allow_previous_questions: quiz.value.allow_previous_questions, // Include the new field
     }
 
     // eslint-disable-next-line no-unused-vars
@@ -368,6 +384,16 @@ const deleteQuestion = async index => {
     }
   }
   quiz.value.questions.splice(index, 1)
+}
+
+const calculateOptionCount = question => {
+  let count = 0
+  if (question.option_a) count++
+  if (question.option_b) count++
+  if (question.option_c) count++
+  if (question.option_d) count++
+  if (question.option_e) count++
+  return count
 }
 </script>
 

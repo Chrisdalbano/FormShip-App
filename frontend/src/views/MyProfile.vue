@@ -154,6 +154,10 @@ import axios from 'axios'
 
 const authStore = useAuthStore()
 const loading = ref(true)
+const account = ref(null) // Declare account as a reactive variable
+const memberCount = ref(0)
+const subscriptionPlan = ref('Free Plan')
+
 const email = ref('')
 const first_name = ref('')
 const last_name = ref('')
@@ -194,14 +198,19 @@ watch(
 const updateProfile = async () => {
   try {
     isSaving.value = true
-    await authStore.updateUserDetails({
-      first_name: first_name.value,
-      last_name: last_name.value,
-      organization_type: organization_type.value,
-    })
+    await axios.put(
+      `${apiBaseUrl}/user/profile/`,
+      {
+        first_name: first_name.value,
+        last_name: last_name.value,
+        organization_type: organization_type.value,
+      },
+      { headers: { Authorization: `Bearer ${authStore.token}` } },
+    )
     alert('Profile updated successfully')
+    authStore.fetchUser() // Refresh user details
   } catch (error) {
-    console.error('Failed to update profile:', error)
+    console.error('Failed to update profile:', error.response?.data || error)
     alert('Failed to update profile')
   } finally {
     isSaving.value = false
@@ -245,9 +254,23 @@ const closeEmailModal = () => (showEmailModal.value = false)
 const openPasswordModal = () => (showPasswordModal.value = true)
 const closePasswordModal = () => (showPasswordModal.value = false)
 
-onMounted(() => {
-  authStore.initializeAuth() // Ensure user data is loaded
-  loading.value = false
+onMounted(async () => {
+  try {
+    authStore.initializeAuth() // Ensure authStore loads user and account
+    await authStore.fetchUser() // Fetch user details from the backend
+
+    if (authStore.account) {
+      account.value = authStore.account
+      memberCount.value = account.value.members?.length || 0 // Adjust based on your backend response
+      subscriptionPlan.value = account.value.subscription_plan || 'Free Plan'
+    } else {
+      console.warn('Account data not available')
+    }
+  } catch (error) {
+    console.error('Failed to load profile data:', error.message)
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 

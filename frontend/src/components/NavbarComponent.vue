@@ -64,7 +64,9 @@
         </div>
       </template>
       <template v-else>
-        <router-link class="ml-4" to="/auth">Login/Register</router-link>
+        <router-link class="ml-4 text-white" to="/auth"
+          >Login/Register</router-link
+        >
       </template>
     </div>
   </nav>

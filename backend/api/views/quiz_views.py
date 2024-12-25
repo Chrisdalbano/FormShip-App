@@ -5,15 +5,13 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-
 from ..utils import parse_quiz_text
-
 from ..models.quiz import Quiz, SharedQuiz
 from ..models.group import Group
 from ..models.question import Question
 from ..serializers.quiz_serializer import QuizSerializer, SharedQuizSerializer
 from ..serializers.question_serializer import QuestionSerializer
-from openai import OpenAI, APIError, APIConnectionError, RateLimitError
+from openai import OpenAI
 
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
@@ -33,7 +31,7 @@ def list_quizzes(request):
         if grouped.lower() == "false" or "null":
             quizzes = quizzes.filter(group__isnull=True)
         elif grouped.lower() == "true":
-            quizzes.quizzes.filter(group__isnull=False)
+            quizzes = quizzes.filter(group__isnull=False)
 
     serializer = QuizSerializer(quizzes, many=True)
     return Response(serializer.data)
@@ -54,28 +52,25 @@ def create_quiz(request):
         knowledge_base = request.data.get("knowledge_base", None)
         display_results = request.data.get("display_results", True)
         require_password = request.data.get("require_password", False)
-        password = request.data.get("password", "")  # Default to empty string if none
+        password = request.data.get("password", "")
         allow_anonymous = request.data.get("allow_anonymous", False)
         require_name = request.data.get("require_name", False)
         is_timed = request.data.get("is_timed", False)
         quiz_time_limit = (
             int(request.data.get("quiz_time_limit", 0)) if is_timed else None
         )
-        time_per_question = request.data.get("time_per_question", False)
-        question_time_limit = (
-            int(request.data.get("question_time_limit", 0))
-            if time_per_question
+        are_questions_timed = request.data.get("are_questions_timed", False)
+        time_per_question = (
+            int(request.data.get("time_per_question", 0))
+            if are_questions_timed
             else None
         )
-        quiz_type = request.data.get(
-            "quiz_type", "multiple-choice"
-        )  # Extract quiz type
-        skippable_questions = request.data.get(
-            "skippable_questions", True
-        )  # Default to True
-        segment_steps = request.data.get(
-            "segment_steps", False
-        )  # Extract segment_steps for stepwise
+        quiz_type = request.data.get("quiz_type", "multiple-choice")
+        skippable_questions = request.data.get("skippable_questions", True)
+        segment_steps = request.data.get("segment_steps", False)
+        allow_previous_questions = request.data.get(
+            "allow_previous_questions", False
+        )  # New field
 
         # Validate title and topic
         if not title or not topic:
@@ -130,11 +125,12 @@ def create_quiz(request):
             require_name=require_name,
             is_timed=is_timed,
             quiz_time_limit=quiz_time_limit,
+            are_questions_timed=are_questions_timed,
             time_per_question=time_per_question,
-            question_time_limit=question_time_limit,
-            quiz_type=quiz_type,  # Correctly set quiz type from the request
-            skippable_questions=skippable_questions,  # Add skippable questions for stepwise
-            segment_steps=segment_steps,  # Set if the quiz is segmented by steps (one question at a time)
+            quiz_type=quiz_type,
+            skippable_questions=skippable_questions,
+            segment_steps=segment_steps,
+            allow_previous_questions=allow_previous_questions,  # New field
         )
 
         # Create question instances and attach to the quiz
@@ -207,6 +203,18 @@ def duplicate_quiz(request, quiz_id):
         question_count=original_quiz.question_count,
         quiz_type=original_quiz.quiz_type,
         group=original_quiz.group,
+        display_results=original_quiz.display_results,
+        require_password=original_quiz.require_password,
+        password=original_quiz.password,
+        allow_anonymous=original_quiz.allow_anonymous,
+        require_name=original_quiz.require_name,
+        is_timed=original_quiz.is_timed,
+        quiz_time_limit=original_quiz.quiz_time_limit,
+        are_questions_timed=original_quiz.are_questions_timed,
+        time_per_question=original_quiz.time_per_question,
+        skippable_questions=original_quiz.skippable_questions,
+        segment_steps=original_quiz.segment_steps,
+        allow_previous_questions=original_quiz.allow_previous_questions,  # New field
     )
     for question in original_quiz.questions.all():
         Question.objects.create(

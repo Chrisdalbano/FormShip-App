@@ -1,68 +1,70 @@
-// store/auth.js
-import { defineStore } from 'pinia'
-import axios from 'axios'
+import { defineStore } from 'pinia';
+import axios from 'axios';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
         token: localStorage.getItem('jwt') || sessionStorage.getItem('jwt') || null,
-        user: null, // Holds user details
+        user: null,
+        account: null,
     }),
     getters: {
         isAuthenticated: (state) => !!state.token,
-        userDetails: (state) => state.user, // Easy access to user details
+        userDetails: (state) => state.user,
+        accountDetails: (state) => state.account,
     },
     actions: {
         setToken(token) {
-            this.token = token
-            localStorage.setItem('jwt', token)
-            sessionStorage.setItem('jwt', token) // Backup in sessionStorage
-            this.fetchUser() // Fetch user details once the token is set
+            this.token = token;
+            localStorage.setItem('jwt', token);
+            sessionStorage.setItem('jwt', token);
+            this.fetchUser();
         },
         async fetchUser() {
             if (this.token) {
                 try {
-                    const response = await axios.get(`${apiBaseUrl}/user/profile/`, {
+                    const userResponse = await axios.get(`${apiBaseUrl}/user/profile/`, {
                         headers: { Authorization: `Bearer ${this.token}` },
-                    })
-                    this.user = response.data
+                    });
+                    this.user = userResponse.data;
+
+                    if (this.user.account_id) {
+                        try {
+                            const accountResponse = await axios.get(
+                                `${apiBaseUrl}/accounts/${this.user.account_id}/`,
+                                { headers: { Authorization: `Bearer ${this.token}` } }
+                            );
+                            this.account = accountResponse.data;
+                        } catch (accountError) {
+                            console.warn("Account not found or inaccessible:", accountError.response?.data || accountError);
+                            this.account = null;
+                        }
+                    } else {
+                        console.warn("User does not have an associated account.");
+                        this.account = null;
+                    }
                 } catch (error) {
-                    console.error('Failed to fetch user data', error)
-                    this.logout() // Logout if fetching user data fails
+                    console.error("Failed to fetch user or account data:", error.response?.data || error);
+                    this.logout();
                 }
             }
-        },
-        async updateUserDetails(updatedUserData) {
-            try {
-                const response = await axios.put(`${apiBaseUrl}/user/profile/`, updatedUserData, {
-                    headers: { Authorization: `Bearer ${this.token}` },
-                })
-                this.user = { ...this.user, ...updatedUserData } // Update user details in the store
-                return response.data
-            } catch (error) {
-                console.error('Failed to update user details', error)
-                throw error
-            }
-        },
+        }
+        ,
         logout(router) {
-            this.token = null
-            this.user = null
-            localStorage.removeItem('jwt')
-            sessionStorage.removeItem('jwt') // Clear from sessionStorage as well
+            this.token = null;
+            this.user = null;
+            this.account = null;
+            localStorage.removeItem('jwt');
+            sessionStorage.removeItem('jwt');
             if (router) {
-                router.push('/auth') // Redirect to auth page if a router instance is provided
+                router.push('/auth');
             }
-        },
-        async ssoLogin(provider) {
-            console.log(`Logging in with ${provider}...`)
-            // Implement SSO login logic as needed
         },
         initializeAuth() {
-            // Called on app initialization to restore token and user details
             if (this.token) {
-                this.fetchUser() // Fetch user details if a token exists
+                this.fetchUser();
             }
         },
     },
-})
+});

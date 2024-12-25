@@ -6,6 +6,8 @@ import TestQuiz from '@/views/TestQuiz.vue'
 import EditQuiz from '@/views/EditQuiz.vue'
 import AuthView from '@/views/AuthView.vue'
 import MyProfile from '@/views/MyProfile.vue'
+import AccountView from '@/views/AccountView.vue'
+import UsersView from '@/views/UsersView.vue'
 
 const routes = [
   { path: '/', name: 'QuizDashboard', component: QuizDashboard, meta: { requiresAuth: true } },
@@ -14,6 +16,8 @@ const routes = [
   { path: '/edit-quiz/:id', name: 'EditQuiz', component: EditQuiz, props: true, meta: { requiresAuth: true } },
   { path: '/auth', name: 'Auth', component: AuthView },
   { path: '/profile', name: 'MyProfile', component: MyProfile, meta: { requiresAuth: true } },
+  { path: '/account', name: 'Account', component: AccountView, meta: { requiresAuth: true } },
+  { path: '/users', name: 'Users', component: UsersView, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({

@@ -31,6 +31,7 @@ class QuizSerializer(serializers.ModelSerializer):
             "questions",
             "skippable_questions",
             "segment_steps",
+            "allow_previous_questions",
         ]
 
     def validate(self, data):

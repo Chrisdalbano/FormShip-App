@@ -1,7 +1,6 @@
 <template>
   <div class="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-lg">
-    <h2 class="text-2xl font-semibold mb-4 text-center">Log in to Inteqra
-    </h2>
+    <h2 class="text-2xl font-semibold mb-4 text-center">Log in to Inteqra</h2>
     <form @submit.prevent="login">
       <div class="mb-4">
         <label class="block text-gray-700">Email</label>
@@ -34,34 +33,40 @@
 </template>
 
 <script>
-import axios from 'axios'
+import { ref } from 'vue'
 import { useAuthStore } from '../store/auth'
+import axios from 'axios'
 
 export default {
-  data() {
-    return {
-      email: '',
-      password: '',
-    }
-  },
-  methods: {
-    async login() {
+  setup(_, { emit }) {
+    const email = ref('')
+    const password = ref('')
+    const authStore = useAuthStore()
+
+    const login = async () => {
       try {
         const response = await axios.post(
-          'http://localhost:8000/api/users/login/',
+          'http://localhost:8000/api/user/login/',
           {
-            email: this.email,
-            password: this.password,
+            email: email.value,
+            password: password.value,
           },
         )
-        const authStore = useAuthStore()
+
         authStore.setToken(response.data.access)
-        this.$emit('login-success')
+        await authStore.fetchUser() // Fetch user data after setting token
+        emit('login-success')
       } catch (error) {
-        console.error(error)
+        console.error('Login error:', error.response?.data || error)
         alert('Login failed')
       }
-    },
+    }
+
+    return {
+      email,
+      password,
+      login,
+    }
   },
 }
 </script>

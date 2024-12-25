@@ -12,45 +12,6 @@
           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
-      <!-- <div class="mb-4">
-        <label class="block text-gray-700">First Name</label>
-        <input
-          type="text"
-          v-model="first_name"
-          placeholder="First Name"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      <div class="mb-4">
-        <label class="block text-gray-700">Last Name</label>
-        <input
-          type="text"
-          v-model="last_name"
-          placeholder="Last Name"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div> -->
-      <!-- <div class="mb-4">
-        <label class="block text-gray-700">Company</label>
-        <input
-          type="text"
-          v-model="company"
-          placeholder="Company (optional)"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-      <div class="mb-4">
-        <label class="block text-gray-700">Organization Type</label>
-        <select
-          v-model="organization_type"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="" disabled selected>Select type</option>
-          <option value="ecommerce">eCommerce</option>
-          <option value="education">Education</option>
-          <option value="medical">Medical</option>
-        </select>
-      </div> -->
       <div class="mb-4">
         <label class="block text-gray-700">Password</label>
         <input
@@ -93,10 +54,6 @@ export default {
   data() {
     return {
       email: '',
-      first_name: '',
-      last_name: '',
-      company: '',
-      organization_type: '',
       password: '',
       confirmPassword: '',
     }
@@ -116,22 +73,12 @@ export default {
         alert('Passwords do not match')
         return
       }
-
       try {
-        // eslint-disable-next-line no-unused-vars
-        const response = await axios.post(
-          'http://localhost:8000/api/users/register/',
-          {
-            email: this.email,
-            // first_name: this.first_name,
-            // last_name: this.last_name,
-            // company: this.company,
-            // organization_type: this.organization_type,
-            password: this.password,
-          },
-        )
+        await axios.post('http://localhost:8000/api/users/register/', {
+          email: this.email,
+          password: this.password,
+        })
 
-        // Auto-login after registration
         const loginResponse = await axios.post(
           'http://localhost:8000/api/users/login/',
           {
@@ -143,7 +90,7 @@ export default {
         authStore.setToken(loginResponse.data.access)
         this.$emit('register-success')
       } catch (error) {
-        console.error(error)
+        console.error('Registration error:', error.response?.data || error)
         alert('Registration failed')
       }
     },
