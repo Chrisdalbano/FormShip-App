@@ -63,8 +63,8 @@
 
     <!-- Add User Modal -->
     <Modal v-if="showAddUserModal" @close="showAddUserModal = false">
-      <h3 class="text-xl font-semibold mb-4">Invite New User</h3>
-      <form @submit.prevent="addUser">
+      <h3 class="text-xl font-semibold mb-4">Create New User</h3>
+      <form @submit.prevent="createUser">
         <div class="mb-4">
           <label class="block text-gray-700">Email</label>
           <input
@@ -76,14 +76,35 @@
           />
         </div>
         <div class="mb-4">
+          <label class="block text-gray-700">Password</label>
+          <input
+            v-model="newUserPassword"
+            class="input-field"
+            type="password"
+            placeholder="Set password"
+            required
+          />
+        </div>
+        <div class="mb-4">
           <label class="block text-gray-700">Role</label>
           <select v-model="newUserRole" class="input-field">
             <option value="member">Member</option>
             <option value="admin">Admin</option>
           </select>
         </div>
+        <div class="mb-4 flex items-center">
+          <input
+            type="checkbox"
+            id="send-invitation"
+            v-model="sendInvitation"
+            class="mr-2"
+          />
+          <label for="send-invitation" class="text-gray-700"
+            >Send Invitation Email</label
+          >
+        </div>
         <button type="submit" class="btn-primary" :disabled="addingUser">
-          <span v-if="addingUser" class="loader mr-2"></span> Invite User
+          <span v-if="addingUser" class="loader mr-2"></span> Create User
         </button>
       </form>
     </Modal>
@@ -102,7 +123,9 @@ const searchQuery = ref('')
 const users = ref([])
 const showAddUserModal = ref(false)
 const newUserEmail = ref('')
+const newUserPassword = ref('')
 const newUserRole = ref('member')
+const sendInvitation = ref(false)
 const addingUser = ref(false)
 
 const fetchUsers = async () => {
@@ -134,35 +157,36 @@ const fetchUsers = async () => {
       'Failed to load users:',
       error.response?.data || error.message,
     )
-    users.value = [] // Reset users to prevent further issues
+    users.value = []
   } finally {
     loading.value = false
   }
 }
 
-const addUser = async () => {
+const createUser = async () => {
   try {
     addingUser.value = true
     const response = await axios.post(
-      `/api/accounts/${authStore.account.id}/invite/`,
+      `/api/accounts/${authStore.account.id}/create-user/`, // Matches backend URL
       {
         email: newUserEmail.value,
+        password: newUserPassword.value,
         role: newUserRole.value,
+        send_invitation: sendInvitation.value,
       },
       {
-        headers: { Authorization: `Bearer ${authStore.token}` },
+        headers: { Authorization: `Bearer ${authStore.token}` }, // Proper token authentication
       },
     )
-
     users.value.push(response.data) // Add the new user to the table
-    alert('User invited successfully')
+    alert('User created successfully')
     showAddUserModal.value = false
   } catch (error) {
     console.error(
-      'Failed to invite user:',
+      'Failed to create user:',
       error.response?.data || error.message,
     )
-    alert('Failed to invite user')
+    alert('Failed to create user')
   } finally {
     addingUser.value = false
   }
@@ -197,10 +221,6 @@ const removeUser = async userEmail => {
     console.error('Failed to remove user:', error.message)
     alert('Failed to remove user')
   }
-}
-
-const editUser = user => {
-  console.log('Edit user:', user)
 }
 
 onMounted(() => {

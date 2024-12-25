@@ -19,7 +19,6 @@ export const useAuthStore = defineStore('auth', {
             this.token = token;
             localStorage.setItem('jwt', token);
             sessionStorage.setItem('jwt', token);
-            this.fetchUser();
         },
         async fetchUser() {
             if (this.token) {
@@ -30,28 +29,23 @@ export const useAuthStore = defineStore('auth', {
                     this.user = userResponse.data;
 
                     if (this.user.account_id) {
-                        try {
-                            const accountResponse = await axios.get(
-                                `${apiBaseUrl}/accounts/${this.user.account_id}/`,
-                                { headers: { Authorization: `Bearer ${this.token}` } }
-                            );
-                            this.account = accountResponse.data;
-                        } catch (accountError) {
-                            console.warn("Account not found or inaccessible:", accountError.response?.data || accountError);
-                            this.account = null;
-                        }
+                        const accountResponse = await axios.get(
+                            `${apiBaseUrl}/accounts/${this.user.account_id}/`,
+                            { headers: { Authorization: `Bearer ${this.token}` } }
+                        );
+                        this.account = accountResponse.data;
                     } else {
-                        console.warn("User does not have an associated account.");
                         this.account = null;
+                        console.warn("No account associated with this user.");
                     }
                 } catch (error) {
-                    console.error("Failed to fetch user or account data:", error.response?.data || error);
+                    console.error("Error fetching user or account details:", error);
                     this.logout();
                 }
             }
-        }
-        ,
-        logout(router) {
+        },
+
+        logout(router = null) {
             this.token = null;
             this.user = null;
             this.account = null;
