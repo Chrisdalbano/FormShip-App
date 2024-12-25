@@ -11,6 +11,7 @@ from ..serializers.account_serializer import (
     AccountMembershipSerializer,
     TransferOwnershipSerializer,
 )
+from ..serializers.user_serializer import UserSerializer
 
 
 @api_view(["POST"])
@@ -102,9 +103,7 @@ def invite_member(request, account_id):
     send_mail(
         subject="You've been invited to Inteqra",
         message=(
-            f"Hello,\n\nYou've been invited to join the account '{account.name}'. "
-            "Please set your password to activate your account.\n\n"
-            "Visit: <password_reset_link>"
+            f"Hello,\n\nYou've been invited to join the account '{account.name}'."
         ),
         from_email="no-reply@inteqra.com",
         recipient_list=[email],
@@ -153,3 +152,56 @@ def set_password(request):
     return Response(
         {"message": "Password set successfully."}, status=status.HTTP_200_OK
     )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_user(request, account_id):
+    account = get_object_or_404(Account, id=account_id)
+    if (
+        request.user != account.owner
+        and not AccountMembership.objects.filter(
+            account=account, user=request.user, role="admin"
+        ).exists()
+    ):
+        return Response(
+            {"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    email = request.data.get("email")
+    password = request.data.get("password")
+    role = request.data.get("role", "member")
+    send_invitation = request.data.get("send_invitation", False)
+
+    if not email or not password:
+        return Response(
+            {"error": "Email and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user, created = User.objects.get_or_create(email=email)
+    if created:
+        user.set_password(password)
+        user.save()
+
+    membership, created = AccountMembership.objects.get_or_create(
+        account=account, user=user, defaults={"role": role}
+    )
+
+    if not created:
+        return Response(
+            {"error": "User is already a member of this account."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if send_invitation:
+        send_mail(
+            "Account Invitation",
+            f"You've been added to the account '{account.name}'.",
+            "no-reply@inteqra.com",
+            [email],
+            fail_silently=False,
+        )
+
+    serializer = UserSerializer(user)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)

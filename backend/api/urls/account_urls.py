@@ -6,6 +6,7 @@ from ..views.account_views import (
     invite_member,
     get_account,
     set_password,
+    create_user,
 )
 
 urlpatterns = [
@@ -23,4 +24,5 @@ urlpatterns = [
     path("<int:account_id>/invite/", invite_member, name="invite_member"),
     path("<int:account_id>/", get_account, name="get_account"),
     path("set-password/", set_password, name="set_password"),
+    path("<int:account_id>/create-user/", create_user, name="create_user"),
 ]
