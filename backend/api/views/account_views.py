@@ -158,6 +158,7 @@ def set_password(request):
 @permission_classes([IsAuthenticated])
 def create_user(request, account_id):
     account = get_object_or_404(Account, id=account_id)
+
     if (
         request.user != account.owner
         and not AccountMembership.objects.filter(
@@ -169,8 +170,8 @@ def create_user(request, account_id):
         )
 
     email = request.data.get("email")
-    password = request.data.get("password")
     role = request.data.get("role", "member")
+    password = request.data.get("password")
     send_invitation = request.data.get("send_invitation", False)
 
     if not email or not password:
@@ -179,9 +180,14 @@ def create_user(request, account_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    user, created = User.objects.get_or_create(email=email)
+    # Create or retrieve the user
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={"password": password},  # `username` will be auto-generated
+    )
+
     if created:
-        user.set_password(password)
+        user.set_password(password)  # Ensure the password is hashed
         user.save()
 
     membership, created = AccountMembership.objects.get_or_create(
@@ -197,7 +203,7 @@ def create_user(request, account_id):
     if send_invitation:
         send_mail(
             "Account Invitation",
-            f"You've been added to the account '{account.name}'.",
+            f"You've been added to the account {account.name}.",
             "no-reply@inteqra.com",
             [email],
             fail_silently=False,
@@ -205,3 +211,43 @@ def create_user(request, account_id):
 
     serializer = UserSerializer(user)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def update_user_role(request, account_id, user_id):
+    """
+    Updates the role of a user in the account.
+    """
+    account = get_object_or_404(Account, id=account_id)
+    if request.user != account.owner:
+        return Response({"error": "Only the owner can update roles."}, status=403)
+
+    user = get_object_or_404(User, id=user_id)
+    role = request.data.get("role")
+
+    if role not in ["member", "admin"]:
+        return Response({"error": "Invalid role."}, status=400)
+
+    membership = get_object_or_404(AccountMembership, user=user, account=account)
+    membership.role = role
+    membership.save()
+
+    return Response({"message": "Role updated successfully."}, status=200)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def remove_user(request, account_id, user_id):
+    """
+    Removes a user from the account.
+    """
+    account = get_object_or_404(Account, id=account_id)
+    if request.user != account.owner:
+        return Response({"error": "Only the owner can remove users."}, status=403)
+
+    user = get_object_or_404(User, id=user_id)
+    membership = get_object_or_404(AccountMembership, user=user, account=account)
+    membership.delete()
+
+    return Response({"message": "User removed successfully."}, status=200)

@@ -5,7 +5,9 @@ from django.contrib.auth.hashers import check_password
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from django.core.mail import send_mail
-
+from ..serializers.user_serializer import MyTokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+from django.utils.timezone import now
 from ..models.user import User, AccountMembership, Account, UserResult
 from ..serializers.user_serializer import (
     UserSerializer,
@@ -13,6 +15,18 @@ from ..serializers.user_serializer import (
     UserResultSerializer,
 )
 from ..serializers.account_serializer import AccountMembershipSerializer
+
+
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            user = self.serializer_class().get_user()
+            user.last_connected = now()
+            user.save()
+        return response
 
 
 @api_view(["PUT"])

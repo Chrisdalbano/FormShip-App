@@ -31,29 +31,23 @@
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="user in filteredUsers"
-            :key="user.user_email"
-            class="border-b"
-          >
+          <tr v-for="user in filteredUsers" :key="user.id" class="border-b">
             <td class="px-4 py-2">{{ user.user_name || 'N/A' }}</td>
-            <td class="px-4 py-2">{{ user.user_email }}</td>
+            <td class="px-4 py-2">{{ user.user_email || 'N/A' }}</td>
             <td class="px-4 py-2">{{ user.role }}</td>
-            <td class="px-4 py-2">{{ user.last_connected || 'Never' }}</td>
             <td class="px-4 py-2">
-              <button
-                v-if="canModifyUser(user)"
-                @click="removeUser(user.user_email)"
-                class="btn-danger"
-              >
-                Remove
-              </button>
-              <button
-                v-if="canModifyUser(user)"
-                @click="editUser(user)"
-                class="btn-secondary"
-              >
+              {{
+                user.last_connected
+                  ? new Date(user.last_connected).toLocaleString()
+                  : 'Never'
+              }}
+            </td>
+            <td class="px-4 py-2">
+              <button @click="editUser(user)" class="btn-secondary">
                 Edit
+              </button>
+              <button @click="removeUser(user)" class="btn-danger">
+                Remove
               </button>
             </td>
           </tr>
@@ -99,9 +93,9 @@
             v-model="sendInvitation"
             class="mr-2"
           />
-          <label for="send-invitation" class="text-gray-700"
-            >Send Invitation Email</label
-          >
+          <label for="send-invitation" class="text-gray-700">
+            Send Invitation Email
+          </label>
         </div>
         <button type="submit" class="btn-primary" :disabled="addingUser">
           <span v-if="addingUser" class="loader mr-2"></span> Create User
@@ -142,16 +136,7 @@ const fetchUsers = async () => {
         headers: { Authorization: `Bearer ${authStore.token}` },
       },
     )
-
-    if (Array.isArray(response.data)) {
-      users.value = response.data
-    } else {
-      console.error(
-        'Invalid response format. Expected an array but received:',
-        response.data,
-      )
-      users.value = []
-    }
+    users.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     console.error(
       'Failed to load users:',
@@ -166,8 +151,8 @@ const fetchUsers = async () => {
 const createUser = async () => {
   try {
     addingUser.value = true
-    const response = await axios.post(
-      `/api/accounts/${authStore.account.id}/create-user/`, // Matches backend URL
+    await axios.post(
+      `/api/accounts/${authStore.account.id}/create-user/`,
       {
         email: newUserEmail.value,
         password: newUserPassword.value,
@@ -175,11 +160,11 @@ const createUser = async () => {
         send_invitation: sendInvitation.value,
       },
       {
-        headers: { Authorization: `Bearer ${authStore.token}` }, // Proper token authentication
+        headers: { Authorization: `Bearer ${authStore.token}` },
       },
     )
-    users.value.push(response.data) // Add the new user to the table
     alert('User created successfully')
+    fetchUsers() // Refresh the users list
     showAddUserModal.value = false
   } catch (error) {
     console.error(
@@ -192,36 +177,68 @@ const createUser = async () => {
   }
 }
 
-const filteredUsers = computed(() =>
-  Array.isArray(users.value)
-    ? users.value.filter(user =>
-        user.user_email.toLowerCase().includes(searchQuery.value.toLowerCase()),
-      )
-    : [],
-)
-
-const canModifyUser = user => {
-  return (
-    authStore.user.role === 'owner' ||
-    (authStore.user.role === 'admin' && user.role !== 'owner')
+const editUser = async user => {
+  const newName = prompt(
+    `Update name for ${user.user_email}:`,
+    user.user_name || 'N/A',
   )
-}
+  const newRole = prompt(
+    `Update role for ${user.user_email} (admin/member):`,
+    user.role,
+  )
 
-const removeUser = async userEmail => {
-  try {
-    await axios.delete(
-      `/api/accounts/${authStore.account.id}/members/${userEmail}/`,
-      {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      },
-    )
-    users.value = users.value.filter(user => user.user_email !== userEmail)
-    alert('User removed successfully')
-  } catch (error) {
-    console.error('Failed to remove user:', error.message)
-    alert('Failed to remove user')
+  if (
+    newName !== null &&
+    newRole !== null &&
+    ['admin', 'member'].includes(newRole.toLowerCase())
+  ) {
+    try {
+      await axios.patch(
+        `/api/accounts/${authStore.account.id}/users/${user.id}/`,
+        {
+          user_name: newName,
+          role: newRole.toLowerCase(),
+        },
+        { headers: { Authorization: `Bearer ${authStore.token}` } },
+      )
+      alert('User updated successfully')
+      fetchUsers()
+    } catch (error) {
+      console.error(
+        'Failed to update user:',
+        error.response?.data || error.message,
+      )
+      alert('Failed to update user')
+    }
   }
 }
+
+const removeUser = async user => {
+  if (confirm(`Are you sure you want to remove ${user.user_email}?`)) {
+    try {
+      await axios.delete(
+        `/api/accounts/${authStore.account.id}/users/${user.id}/`,
+        { headers: { Authorization: `Bearer ${authStore.token}` } },
+      )
+      alert('User removed successfully')
+      fetchUsers()
+    } catch (error) {
+      console.error(
+        'Failed to remove user:',
+        error.response?.data || error.message,
+      )
+      alert('Failed to remove user')
+    }
+  }
+}
+
+const filteredUsers = computed(() =>
+  users.value.filter(user =>
+    (user.user_email || '')
+      .toLowerCase()
+      .includes(searchQuery.value.toLowerCase()),
+  ),
+)
 
 onMounted(() => {
   if (authStore.isAuthenticated) {

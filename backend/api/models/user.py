@@ -3,6 +3,7 @@ from django.contrib.auth.models import User, AbstractUser, Group, Permission
 from .quiz import Quiz
 from django.conf import settings
 from django.contrib.auth.models import BaseUserManager
+from django.utils.crypto import get_random_string
 
 
 class UserQuizHistory(models.Model):
@@ -89,10 +90,15 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True)  # Email serves as the unique identifier
+    username = models.CharField(
+        max_length=150, unique=True, blank=True
+    )  # Randomly generated if blank
     first_name = models.CharField(max_length=50, blank=True, null=True)
     last_name = models.CharField(max_length=50, blank=True, null=True)
     company = models.CharField(max_length=255, blank=True, null=True)
+    last_connected = models.DateTimeField(null=True, blank=True)
+
     organization_type = models.CharField(
         max_length=50,
         choices=[
@@ -103,11 +109,6 @@ class User(AbstractUser):
         blank=True,
         null=True,
     )
-    # account = models.ForeignKey(
-    #     Account, on_delete=models.CASCADE, null=True, blank=True
-    # )
-
-    # is_owner = models.BooleanField(default=False)
 
     groups = models.ManyToManyField(
         Group,
@@ -128,6 +129,12 @@ class User(AbstractUser):
     REQUIRED_FIELDS = []
 
     objects = UserManager()
+
+    def save(self, *args, **kwargs):
+        # Generate a random username if it is blank or not provided
+        if not self.username:
+            self.username = get_random_string(length=12)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.email

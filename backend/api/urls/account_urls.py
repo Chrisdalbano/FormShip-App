@@ -7,6 +7,8 @@ from ..views.account_views import (
     get_account,
     set_password,
     create_user,
+    update_user_role,
+    remove_user,
 )
 
 urlpatterns = [
@@ -25,4 +27,12 @@ urlpatterns = [
     path("<int:account_id>/", get_account, name="get_account"),
     path("set-password/", set_password, name="set_password"),
     path("<int:account_id>/create-user/", create_user, name="create_user"),
+    path(
+        "<int:account_id>/users/<int:user_id>/update-role/",
+        update_user_role,
+        name="update_user_role",
+    ),
+    path(
+        "<int:account_id>/users/<int:user_id>/remove/", remove_user, name="remove_user"
+    ),
 ]
