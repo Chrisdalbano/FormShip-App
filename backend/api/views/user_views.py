@@ -208,16 +208,61 @@ def list_account_members(request, account_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_user(request, account_id):
-    """
-    Allows account owners to create a new user directly under their account.
-    """
-    account = get_object_or_404(Account, id=account_id, owner=request.user)
-    serializer = UserSerializer(data=request.data)
-    if serializer.is_valid():
-        user = serializer.save()
-        AccountMembership.objects.create(account=account, user=user, role="member")
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    account = get_object_or_404(Account, id=account_id)
+
+    # Permission check
+    if (
+        request.user != account.owner
+        and not AccountMembership.objects.filter(
+            account=account, user=request.user, role="admin"
+        ).exists()
+    ):
+        return Response(
+            {"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    email = request.data.get("email")
+    role = request.data.get("role", "member")
+    password = request.data.get("password")
+    send_invitation = request.data.get("send_invitation", False)
+
+    if not email or not password:
+        return Response(
+            {"error": "Email and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Create or retrieve the user
+    user, created = User.objects.get_or_create(email=email)
+
+    if created:
+        user.set_password(password)  # Ensure the password is hashed
+        user.save()
+
+    # Validate and create AccountMembership
+    membership, membership_created = AccountMembership.objects.get_or_create(
+        account=account,
+        user=user,
+        defaults={"role": role},
+    )
+
+    if not membership_created and membership.account != account:
+        return Response(
+            {"error": "User is already a member of another account."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if send_invitation:
+        send_mail(
+            "Account Invitation",
+            f"You've been added to the account {account.name}.",
+            "no-reply@inteqra.com",
+            [email],
+            fail_silently=False,
+        )
+
+    serializer = UserSerializer(user)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])

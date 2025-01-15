@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+import logging
 
 from ..models.user import Account, AccountMembership, User
 from ..serializers.account_serializer import (
@@ -102,9 +103,7 @@ def invite_member(request, account_id):
     # Send invitation email
     send_mail(
         subject="You've been invited to Inteqra",
-        message=(
-            f"Hello,\n\nYou've been invited to join the account '{account.name}'."
-        ),
+        message=f"Hello,\n\nYou've been invited to join the account '{account.name}'.",
         from_email="no-reply@inteqra.com",
         recipient_list=[email],
         fail_silently=False,
@@ -213,41 +212,80 @@ def create_user(request, account_id):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["PATCH"])
+logger = logging.getLogger(__name__)
+
+
+@api_view(["PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
-def update_user_role(request, account_id, user_id):
+def manage_user(request, account_id, user_id):
     """
-    Updates the role of a user in the account.
+    Updates or removes a user in the account.
     """
+    logger.info(
+        f"Managing user: {user_id} in account: {account_id} by user: {request.user.id}"
+    )
+
     account = get_object_or_404(Account, id=account_id)
-    if request.user != account.owner:
-        return Response({"error": "Only the owner can update roles."}, status=403)
 
-    user = get_object_or_404(User, id=user_id)
-    role = request.data.get("role")
+    # Validate the user is part of the account
+    membership = AccountMembership.objects.filter(
+        account=account, user_id=user_id
+    ).first()
+    if not membership:
+        return Response(
+            {"error": f"User with ID {user_id} is not part of account {account_id}."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
-    if role not in ["member", "admin"]:
-        return Response({"error": "Invalid role."}, status=400)
+    user = membership.user
 
-    membership = get_object_or_404(AccountMembership, user=user, account=account)
-    membership.role = role
-    membership.save()
+    # Check permissions
+    if (
+        request.user != account.owner
+        and not AccountMembership.objects.filter(
+            account=account, user=request.user, role="admin"
+        ).exists()
+    ):
+        return Response(
+            {"error": "Permission denied. Only owners or admins can modify users."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
-    return Response({"message": "Role updated successfully."}, status=200)
+    if request.method == "PATCH":
+        # Update user role or attributes
+        role = request.data.get("role")
+        user_name = request.data.get("user_name")
+        user_email = request.data.get("user_email")
+        first_name = request.data.get("first_name")
+        last_name = request.data.get("last_name")
 
+        if role:
+            membership.role = role
+            membership.save()
 
-@api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
-def remove_user(request, account_id, user_id):
-    """
-    Removes a user from the account.
-    """
-    account = get_object_or_404(Account, id=account_id)
-    if request.user != account.owner:
-        return Response({"error": "Only the owner can remove users."}, status=403)
+        if user_name:
+            user.username = user_name  # Update the username field
+            user.save()
 
-    user = get_object_or_404(User, id=user_id)
-    membership = get_object_or_404(AccountMembership, user=user, account=account)
-    membership.delete()
+        if user_email:
+            user.email = user_email  # Update the email field
+            user.save()
 
-    return Response({"message": "User removed successfully."}, status=200)
+        if first_name:
+            user.first_name = first_name
+            user.save()
+
+        if last_name:
+            user.last_name = last_name
+            user.save()
+
+        return Response(
+            {"message": "User updated successfully."}, status=status.HTTP_200_OK
+        )
+
+    if request.method == "DELETE":
+        # Remove the user from the account
+        membership.delete()
+        return Response(
+            {"message": "User removed successfully."}, status=status.HTTP_200_OK
+        )

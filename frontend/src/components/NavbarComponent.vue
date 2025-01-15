@@ -3,7 +3,7 @@
     <!-- Logo and Navigation Links -->
     <div>
       <router-link class="font-bold text-xl text-white" to="/"
-        >Inteqra</router-link
+        >Formship</router-link
       >
       <router-link
         v-if="authStore.isAuthenticated"

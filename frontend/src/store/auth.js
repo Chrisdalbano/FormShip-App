@@ -22,28 +22,34 @@ export const useAuthStore = defineStore('auth', {
         },
         async fetchUser() {
             if (this.token) {
-                try {
-                    const userResponse = await axios.get(`${apiBaseUrl}/user/profile/`, {
-                        headers: { Authorization: `Bearer ${this.token}` },
-                    });
-                    this.user = userResponse.data;
-
-                    if (this.user.account_id) {
-                        const accountResponse = await axios.get(
-                            `${apiBaseUrl}/accounts/${this.user.account_id}/`,
-                            { headers: { Authorization: `Bearer ${this.token}` } }
-                        );
-                        this.account = accountResponse.data;
-                    } else {
-                        this.account = null;
-                        console.warn("No account associated with this user.");
-                    }
-                } catch (error) {
-                    console.error("Error fetching user or account details:", error);
-                    this.logout();
+              try {
+                const userResponse = await axios.get(`${apiBaseUrl}/user/profile/`, {
+                  headers: { Authorization: `Bearer ${this.token}` },
+                });
+                this.user = userResponse.data;
+          
+                if (this.user.account_id) {
+                  try {
+                    const accountResponse = await axios.get(
+                      `${apiBaseUrl}/accounts/${this.user.account_id}/`,
+                      { headers: { Authorization: `Bearer ${this.token}` } }
+                    );
+                    this.account = accountResponse.data;
+                  } catch (accountError) {
+                    console.error("Failed to fetch account details:", accountError);
+                    this.account = null;
+                  }
+                } else {
+                  console.warn("No account associated with this user.");
+                  this.account = null;
                 }
+              } catch (error) {
+                console.error("Error fetching user or account details:", error);
+                this.logout();
+              }
             }
-        },
+          },
+          
 
         logout(router = null) {
             this.token = null;

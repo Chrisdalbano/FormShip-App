@@ -44,14 +44,14 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
 const fetchAccount = async () => {
   try {
-    if (!authStore.user || !authStore.user.account_id) {
+    if (!authStore.user || !authStore.user.id) {
       console.error('User or account information is missing')
       loading.value = false
       return
     }
 
     const response = await axios.get(
-      `${apiBaseUrl}/accounts/${authStore.user.account_id}/`,
+      `${apiBaseUrl}/accounts/${authStore.user.id}/`,
       {
         headers: { Authorization: `Bearer ${authStore.token}` },
       },
@@ -65,7 +65,7 @@ const fetchAccount = async () => {
 }
 
 const navigateToUsers = () => {
-  router.push('/manage-users')
+  router.push('/users')
 }
 
 const upgradePlan = () => {

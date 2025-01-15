@@ -1,7 +1,5 @@
 <template>
-  <div
-    class="users-container max-w-full mx-auto mt-12 p-6 bg-white rounded-lg shadow-lg"
-  >
+  <div class="users-container">
     <h2 class="text-2xl font-semibold mb-4 text-center">Manage Users</h2>
     <div v-if="loading" class="text-center text-gray-600">Loading...</div>
     <div v-else-if="!authStore.account">
@@ -13,7 +11,7 @@
           type="text"
           v-model="searchQuery"
           placeholder="Search users..."
-          class="input-field"
+          class="input-field p-1 rounded"
         />
         <button @click="showAddUserModal = true" class="btn-primary">
           Add User
@@ -31,8 +29,13 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in filteredUsers" :key="user.id" class="border-b">
+          <tr
+            v-for="user in filteredUsers"
+            :key="user.user_id"
+            class="border-b"
+          >
             <td class="px-4 py-2">{{ user.user_name || 'N/A' }}</td>
+
             <td class="px-4 py-2">{{ user.user_email || 'N/A' }}</td>
             <td class="px-4 py-2">{{ user.role }}</td>
             <td class="px-4 py-2">
@@ -43,10 +46,10 @@
               }}
             </td>
             <td class="px-4 py-2">
-              <button @click="editUser(user)" class="btn-secondary">
+              <button @click="openEditModal(user)" class="btn-secondary">
                 Edit
               </button>
-              <button @click="removeUser(user)" class="btn-danger">
+              <button @click="deleteUser(user)" class="btn-danger">
                 Remove
               </button>
             </td>
@@ -102,6 +105,16 @@
         </button>
       </form>
     </Modal>
+
+    <!-- Edit User Modal -->
+    <EditUserModal
+      v-if="showEditUserModal"
+      :visible="showEditUserModal"
+      :user="selectedUser"
+      @close="closeEditModal"
+      @update="updateUser"
+      @delete="deleteUser"
+    />
   </div>
 </template>
 
@@ -110,12 +123,16 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '../store/auth'
 import Modal from '../components/EditPopModal.vue'
+import EditUserModal from '../components/EditUserModal.vue'
 
 const authStore = useAuthStore()
 const loading = ref(true)
 const searchQuery = ref('')
 const users = ref([])
 const showAddUserModal = ref(false)
+const showEditUserModal = ref(false)
+const selectedUser = ref(null)
+
 const newUserEmail = ref('')
 const newUserPassword = ref('')
 const newUserRole = ref('member')
@@ -123,12 +140,7 @@ const sendInvitation = ref(false)
 const addingUser = ref(false)
 
 const fetchUsers = async () => {
-  if (!authStore.account) {
-    console.error('Account data is not available')
-    loading.value = false
-    return
-  }
-
+  loading.value = true
   try {
     const response = await axios.get(
       `/api/accounts/${authStore.account.id}/members/`,
@@ -136,6 +148,7 @@ const fetchUsers = async () => {
         headers: { Authorization: `Bearer ${authStore.token}` },
       },
     )
+    console.log('Fetched users:', response.data) // Debug log
     users.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     console.error(
@@ -151,21 +164,24 @@ const fetchUsers = async () => {
 const createUser = async () => {
   try {
     addingUser.value = true
+    const newUserData = {
+      email: newUserEmail.value,
+      password: newUserPassword.value,
+      role: newUserRole.value,
+      send_invitation: sendInvitation.value,
+    }
     await axios.post(
       `/api/accounts/${authStore.account.id}/create-user/`,
-      {
-        email: newUserEmail.value,
-        password: newUserPassword.value,
-        role: newUserRole.value,
-        send_invitation: sendInvitation.value,
-      },
-      {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      },
+      newUserData,
+      { headers: { Authorization: `Bearer ${authStore.token}` } },
     )
     alert('User created successfully')
-    fetchUsers() // Refresh the users list
+    fetchUsers()
     showAddUserModal.value = false
+    newUserEmail.value = ''
+    newUserPassword.value = ''
+    newUserRole.value = 'member'
+    sendInvitation.value = false
   } catch (error) {
     console.error(
       'Failed to create user:',
@@ -177,47 +193,14 @@ const createUser = async () => {
   }
 }
 
-const editUser = async user => {
-  const newName = prompt(
-    `Update name for ${user.user_email}:`,
-    user.user_name || 'N/A',
-  )
-  const newRole = prompt(
-    `Update role for ${user.user_email} (admin/member):`,
-    user.role,
-  )
+const deleteUser = async user => {
+  console.log('Deleting user:', user)
+  console.log('Account ID:', authStore.account.id)
 
-  if (
-    newName !== null &&
-    newRole !== null &&
-    ['admin', 'member'].includes(newRole.toLowerCase())
-  ) {
-    try {
-      await axios.patch(
-        `/api/accounts/${authStore.account.id}/users/${user.id}/`,
-        {
-          user_name: newName,
-          role: newRole.toLowerCase(),
-        },
-        { headers: { Authorization: `Bearer ${authStore.token}` } },
-      )
-      alert('User updated successfully')
-      fetchUsers()
-    } catch (error) {
-      console.error(
-        'Failed to update user:',
-        error.response?.data || error.message,
-      )
-      alert('Failed to update user')
-    }
-  }
-}
-
-const removeUser = async user => {
   if (confirm(`Are you sure you want to remove ${user.user_email}?`)) {
     try {
       await axios.delete(
-        `/api/accounts/${authStore.account.id}/users/${user.id}/`,
+        `/api/accounts/${authStore.account.id}/users/${user.user_id}/`,
         { headers: { Authorization: `Bearer ${authStore.token}` } },
       )
       alert('User removed successfully')
@@ -227,9 +210,56 @@ const removeUser = async user => {
         'Failed to remove user:',
         error.response?.data || error.message,
       )
-      alert('Failed to remove user')
+      alert(
+        `Failed to remove user: ${error.response?.data?.error || error.message}`,
+      )
     }
   }
+}
+
+const updateUser = async updatedUser => {
+  try {
+    await axios.patch(
+      `/api/accounts/${authStore.account.id}/users/${updatedUser.user_id}/`,
+      {
+        role: updatedUser.role,
+        first_name: updatedUser.first_name,
+        last_name: updatedUser.last_name,
+        user_email: updatedUser.user_email,
+      },
+      { headers: { Authorization: `Bearer ${authStore.token}` } },
+    )
+    alert('User updated successfully')
+    fetchUsers()
+    closeEditModal()
+  } catch (error) {
+    console.error(
+      'Failed to update user:',
+      error.response?.data || error.message,
+    )
+    alert('Failed to update user. Please check if the user ID is valid.')
+  }
+}
+
+const openEditModal = user => {
+  console.log('User object:', user)
+
+  selectedUser.value = {
+    first_name:
+      user.first_name ||
+      (user.user_name ? user.user_name.split(' ')[0] : 'N/A'),
+    last_name:
+      user.last_name || (user.user_name ? user.user_name.split(' ')[1] : 'N/A'),
+    user_email: user.user_email || '',
+    role: user.role || 'member',
+    user_id: user.user_id,
+  }
+  showEditUserModal.value = true
+}
+
+const closeEditModal = () => {
+  showEditUserModal.value = false
+  selectedUser.value = null
 }
 
 const filteredUsers = computed(() =>
@@ -240,13 +270,7 @@ const filteredUsers = computed(() =>
   ),
 )
 
-onMounted(() => {
-  if (authStore.isAuthenticated) {
-    fetchUsers()
-  } else {
-    console.error('User is not authenticated')
-  }
-})
+onMounted(fetchUsers)
 </script>
 
 <style scoped>
