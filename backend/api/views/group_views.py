@@ -1,36 +1,38 @@
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
 from rest_framework.response import Response
 from rest_framework import status
 from ..models.group import Group
+
 from ..serializers.group_serializer import GroupSerializer
 
 
 @api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])  # Ensure the user is authenticated
 def group_list(request):
+    account = request.user.accounts.first()
+    if not account:
+        return Response(
+            {"error": "No account associated with the user."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     if request.method == "GET":
-        groups = Group.objects.all().order_by("order")
+        groups = Group.objects.filter(account=account).order_by("order")
         serializer = GroupSerializer(groups, many=True)
         return Response(serializer.data)
 
     elif request.method == "POST":
+        # Add account to the request data before serialization
+        request.data["account"] = account.id  # Add account ID explicitly
         serializer = GroupSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["POST"])
-def create_group(request):
-    """
-    Creates a new group.
-    """
-    serializer = GroupSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET", "PUT", "DELETE"])

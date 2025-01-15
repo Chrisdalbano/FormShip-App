@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User, AbstractUser, Group, Permission
-from .quiz import Quiz
+
+# from .quiz import Quiz
 from django.conf import settings
 from django.contrib.auth.models import BaseUserManager
 from django.utils.crypto import get_random_string
@@ -8,7 +9,7 @@ from django.utils.crypto import get_random_string
 
 class UserQuizHistory(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
+    quiz = models.ForeignKey("Quiz", on_delete=models.CASCADE)  # Use string reference
     score = models.IntegerField()
     xp_earned = models.IntegerField()
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -18,7 +19,7 @@ class UserQuizHistory(models.Model):
 
 
 class UserResult(models.Model):
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="results")
+    quiz = models.ForeignKey("Quiz", on_delete=models.CASCADE, related_name="results")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )

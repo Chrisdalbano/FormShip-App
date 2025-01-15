@@ -249,7 +249,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../store/auth'
+
 import axios from 'axios'
+const authStore = useAuthStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -314,13 +317,17 @@ const updateQuiz = async () => {
         ? quiz.value.time_per_question
         : null,
       skippable_questions: quiz.value.skippable_questions,
-      allow_previous_questions: quiz.value.allow_previous_questions, // Include the new field
+      allow_previous_questions: quiz.value.allow_previous_questions,
+      account_id: authStore.account.id, // Include the account_id
     }
 
     // eslint-disable-next-line no-unused-vars
     const response = await axios.put(
       `${apiBaseUrl}/quizzes/${quizId}/`,
       payload,
+      {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      },
     )
 
     for (const question of quiz.value.questions) {

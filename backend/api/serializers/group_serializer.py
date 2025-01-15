@@ -8,4 +8,4 @@ class GroupSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ["id", "name", "color", "order", "created_at", "quizzes"]
+        fields = ["id", "name", "account", "color", "order", "created_at", "quizzes"]

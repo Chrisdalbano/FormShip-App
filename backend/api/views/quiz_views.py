@@ -1,7 +1,9 @@
 from http import client
 import os
 from openai import APIConnectionError, APIError, RateLimitError
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -20,7 +22,9 @@ client = OpenAI(
 
 @api_view(["GET", "POST"])
 def list_quizzes(request):
-    quizzes = Quiz.objects.all()
+    account_id = request.user.accounts.first().id
+    quizzes = Quiz.objects.filter(account_id=account_id)  # Filter quizzes by account
+
     group_id = request.query_params.get("group_id", None)
     grouped = request.query_params.get("grouped", None)
 
@@ -38,11 +42,20 @@ def list_quizzes(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])  # Ensure the user is authenticated
 def create_quiz(request):
     """
     Creates a new quiz by generating questions with OpenAI API or by analyzing user-provided knowledge base.
     """
     try:
+        account = request.user.accounts.first()  # Retrieve the associated account
+
+        if not account:
+            return Response(
+                {"error": "No account associated with the user."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Extracting fields from request data
         title = request.data.get("title")
         topic = request.data.get("topic")
@@ -114,6 +127,7 @@ def create_quiz(request):
 
         # Create a quiz instance
         quiz = Quiz.objects.create(
+            account=account,
             title=title,
             topic=topic,
             difficulty=difficulty,

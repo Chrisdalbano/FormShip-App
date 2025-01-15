@@ -11,6 +11,7 @@ class QuizSerializer(serializers.ModelSerializer):
         model = Quiz
         fields = [
             "id",
+            "account",  # Add account field
             "group",
             "order",
             "title",
@@ -25,7 +26,7 @@ class QuizSerializer(serializers.ModelSerializer):
             "quiz_type",
             "created_at",
             "quiz_time_limit",
-            "are_questions_timed",  # New field
+            "are_questions_timed",
             "time_per_question",
             "is_timed",
             "questions",

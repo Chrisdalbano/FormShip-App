@@ -1,8 +1,12 @@
 from django.db import models
 from .group import Group
+from .user import Account
 
 
 class Quiz(models.Model):
+    account = models.ForeignKey(
+        Account, related_name="quizzes", on_delete=models.CASCADE
+    )  # Link quiz to account
     group = models.ForeignKey(
         Group, related_name="quizzes", on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -25,7 +29,6 @@ class Quiz(models.Model):
     skippable_questions = models.BooleanField(default=True)
     segment_steps = models.BooleanField(default=False)
     allow_previous_questions = models.BooleanField(default=False)  # New field
-
 
     def __str__(self):
         return self.title

@@ -70,6 +70,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useAuthStore } from '../store/auth'
+
 import { useRouter } from 'vue-router'
 import useGroupApi from '../composables/useGroupApi'
 import useDragAndDrop from '../composables/useDragAndDrop'
@@ -79,6 +81,8 @@ import axios from 'axios'
 
 const router = useRouter()
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+const authStore = useAuthStore()
+
 
 // Reactive state for ungrouped quizzes, selected quiz options, and expanded groups
 const ungroupedQuizzes = ref([])
@@ -116,7 +120,12 @@ const toggleMoreOptions = quizId => {
 // Fetch ungrouped quizzes
 const fetchUngroupedQuizzes = async () => {
   try {
-    const response = await axios.get(`${apiBaseUrl}/quizzes/?grouped=false`)
+    const response = await axios.get(
+      `${apiBaseUrl}/quizzes/?grouped=false&account_id=${authStore.account.id}`,
+      {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      },
+    )
     ungroupedQuizzes.value = response.data
   } catch (error) {
     console.error('Error fetching ungrouped quizzes:', error)

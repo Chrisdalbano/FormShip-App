@@ -282,8 +282,10 @@
 import { ref } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const questions = ref([])
 let createdQuizId = null
@@ -327,7 +329,6 @@ const handleFileUpload = event => {
 const createQuiz = async () => {
   loading.value = true
   try {
-    // Construct the requestData based on the quiz object
     const requestData = {
       title: quiz.value.title,
       topic: quiz.value.topic,
@@ -345,7 +346,7 @@ const createQuiz = async () => {
       question_time_limit: quiz.value.time_per_question
         ? quiz.value.question_time_limit
         : null,
-      quiz_type: quiz.value.quiz_type, // Ensure quiz_type is correctly set
+      quiz_type: quiz.value.quiz_type,
       allow_skipping:
         quiz.value.quiz_type === 'stepwise'
           ? quiz.value.skippable_questions
@@ -354,6 +355,7 @@ const createQuiz = async () => {
         quiz.value.quiz_type === 'stepwise' && !quiz.value.skippable_questions
           ? quiz.value.stepwise_time_limit
           : null,
+      account_id: authStore.account.id, // Include the account_id
     }
 
     if (quiz.value.use_knowledge_base) {
@@ -363,9 +365,11 @@ const createQuiz = async () => {
     const response = await axios.post(
       `${apiBaseUrl}/quizzes/create/`,
       requestData,
+      {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      },
     )
 
-    // Check if the response contains the quiz ID
     if (response.data.id) {
       createdQuizId = response.data.id
       questions.value = response.data.questions || []
@@ -376,7 +380,7 @@ const createQuiz = async () => {
   } catch (error) {
     console.error('Error generating quiz:', error)
     alert('Failed to generate quiz. Please try again.')
-    questions.value = [] // Set to an empty array if quiz creation fails
+    questions.value = []
   } finally {
     loading.value = false
   }
