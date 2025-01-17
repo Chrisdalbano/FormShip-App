@@ -3,273 +3,288 @@
     class="create-quiz-container w-full max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg"
   >
     <h1 class="text-3xl font-bold mb-4">Create a New Quiz</h1>
+
     <form @submit.prevent="createQuiz">
-      <!-- Quiz Information Inputs -->
+      <!-- 1. Basic Info -->
       <div class="mb-4">
-        <label for="title" class="block text-lg font-semibold mb-2"
-          >Quiz Title</label
-        >
+        <label class="block text-lg font-semibold mb-2">Quiz Title</label>
         <input
           v-model="quiz.title"
           type="text"
-          id="title"
-          placeholder="Name your quiz"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          placeholder="Give your quiz a name"
+          class="input-field"
           required
         />
       </div>
+
       <div class="mb-4">
-        <label for="topic" class="block text-lg font-semibold mb-2"
-          >About the quiz</label
+        <label class="block text-lg font-semibold mb-2"
+          >Quiz Topic/Description</label
         >
         <input
           v-model="quiz.topic"
           type="text"
-          id="topic"
-          placeholder="Provide details about the quiz for faster generation (AI)"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          placeholder="Short description or topic"
+          class="input-field"
           required
         />
       </div>
+
+      <!-- 2. Evaluation Type & Testing Mode -->
       <div class="mb-4">
-        <label for="questionCount" class="block text-lg font-semibold mb-2"
+        <label class="block text-lg font-semibold mb-2">Evaluation Type</label>
+        <select v-model="quiz.evaluation_type" class="input-field">
+          <option value="pre">Pre-Evaluated</option>
+          <option value="hybrid">Hybrid</option>
+          <option value="post">Post-Evaluated</option>
+        </select>
+        <p class="text-sm text-gray-600 mt-1">
+          <strong>Pre-Evaluated:</strong> fully auto-graded;
+          <strong>Hybrid:</strong> partial auto-grade & free-text;
+          <strong>Post-Evaluated:</strong> manual grading needed.
+        </p>
+      </div>
+
+      <div class="flex items-center mb-4">
+        <input
+          id="isTesting"
+          type="checkbox"
+          v-model="quiz.is_testing"
+          class="mr-2"
+        />
+        <label for="isTesting" class="text-gray-700">
+          **Testing Mode** (No real results recorded)
+        </label>
+      </div>
+
+      <!-- 3. Publish & Access Control -->
+      <div class="flex items-center mb-4">
+        <input
+          id="isPublished"
+          type="checkbox"
+          v-model="quiz.is_published"
+          class="mr-2"
+        />
+        <label for="isPublished" class="text-gray-700">
+          Publish This Quiz Immediately?
+        </label>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-lg font-semibold mb-2">Access Control</label>
+        <select v-model="quiz.access_control" class="input-field">
+          <option value="public">Public</option>
+          <option value="invitation">Invitation Only</option>
+          <option value="login_required">Login Required</option>
+        </select>
+        <p class="text-sm text-gray-600 mt-1">
+          <strong>Public:</strong> anyone with link can attempt;
+          <strong>Invitation Only:</strong> must be invited;
+          <strong>Login Required:</strong> user must be authenticated.
+        </p>
+      </div>
+
+      <!-- 4. AI Generation & Knowledge Base -->
+      <div class="mb-4">
+        <label class="block text-lg font-semibold mb-2"
           >Number of Questions</label
         >
         <input
+          v-model.number="quiz.question_count"
           type="number"
-          v-model="quiz.question_count"
-          min="2"
-          max="5"
-          id="questionCount"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          min="1"
+          max="25"
+          class="input-field"
           required
         />
       </div>
+
       <div class="mb-4">
-        <label for="optionCount" class="block text-lg font-semibold mb-2"
-          >Number of Answer Options per Question</label
+        <label class="block text-lg font-semibold mb-2"
+          >Options per Question</label
         >
         <input
+          v-model.number="quiz.option_count"
           type="number"
-          v-model="quiz.option_count"
           min="2"
           max="5"
-          id="optionCount"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+          class="input-field"
           required
         />
       </div>
-      <div class="mb-4">
-        <label for="useKnowledgeBase" class="block text-lg font-semibold mb-2"
-          >Use Your Own Knowledge Base?</label
-        >
+
+      <div class="flex items-center mb-4">
         <input
+          id="useKnowledgeBase"
           type="checkbox"
           v-model="quiz.use_knowledge_base"
-          id="useKnowledgeBase"
           class="mr-2"
         />
-        <span>Yes, use my provided information to generate the quiz.</span>
+        <label for="useKnowledgeBase" class="text-gray-700">
+          Use My Own Knowledge Base for AI Generation
+        </label>
       </div>
+
       <div v-if="quiz.use_knowledge_base" class="mb-4">
-        <label for="knowledgeBaseInput" class="block text-lg font-semibold mb-2"
-          >Knowledge Base Input (Text or Upload File)</label
-        >
+        <label class="block text-lg font-semibold mb-2">
+          Knowledge Base Input (Text or File)
+        </label>
         <textarea
           v-model="quiz.knowledge_base_text"
-          id="knowledgeBaseInput"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mb-4"
-          rows="5"
-          placeholder="You can paste your knowledge base text here..."
+          rows="4"
+          class="input-field mb-2"
+          placeholder="Paste your knowledge base text here..."
         ></textarea>
-        <input
-          type="file"
-          @change="handleFileUpload"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
-        />
+        <input type="file" @change="handleFileUpload" class="input-field" />
       </div>
-      <!-- Quiz Type Selection -->
+
+      <!-- 5. Quiz Layout & Timers -->
       <div class="mb-4">
-        <label for="quizType" class="block text-lg font-semibold mb-2"
-          >Select Quiz Type</label
-        >
-        <select
-          v-model="quiz.quiz_type"
-          id="quizType"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
-        >
-          <option value="standard">
-            Standard Quiz (All Questions at Once)
-          </option>
-          <option value="stepwise">
-            Stepwise Quiz (One Question at a Time)
-          </option>
+        <label class="block text-lg font-semibold mb-2">Quiz Layout Type</label>
+        <select v-model="quiz.quiz_type" class="input-field">
+          <option value="standard">All-at-Once (Standard)</option>
+          <option value="stepwise">Stepwise (One Question at a Time)</option>
         </select>
       </div>
-      <!-- Stepwise Quiz Options -->
-      <div v-if="quiz.quiz_type === 'stepwise'" class="mb-4">
-        <label for="allowSkipping" class="block text-lg font-semibold mb-2"
-          >Allow Skipping Questions?</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.allow_skipping"
-          id="allowSkipping"
-        />
-        <div v-if="!quiz.allow_skipping" class="mt-4">
-          <label
-            for="stepwiseTimeLimit"
-            class="block text-lg font-semibold mb-2"
-            >Set Time Limit for Each Step (in seconds)</label
-          >
+
+      <!-- Stepwise fields -->
+      <div
+        v-if="quiz.quiz_type === 'stepwise'"
+        class="mb-4 pl-4 border-l-2 border-blue-300"
+      >
+        <div class="mb-2">
+          <label class="inline-flex items-center">
+            <input
+              type="checkbox"
+              v-model="quiz.skippable_questions"
+              class="mr-2"
+            />
+            Allow Skipping Questions?
+          </label>
+        </div>
+        <div v-if="!quiz.skippable_questions" class="mb-2 ml-4">
+          <label class="block text-sm">Time Limit per Step (seconds)</label>
           <input
             type="number"
-            v-model="quiz.stepwise_time_limit"
+            v-model.number="quiz.stepwise_time_limit"
             min="5"
-            id="stepwiseTimeLimit"
-            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+            class="input-field"
           />
         </div>
       </div>
-      <!-- Timer Options -->
+
+      <!-- Timer settings -->
       <div class="mb-4">
-        <label for="isTimed" class="block text-lg font-semibold mb-2"
-          >Set Time Limit for Quiz?</label
-        >
-        <input type="checkbox" v-model="quiz.is_timed" id="isTimed" />
-        <div v-if="quiz.is_timed" class="mt-4">
-          <label for="quizTimeLimit" class="block text-lg font-semibold mb-2"
-            >Total Time Limit for Quiz (in minutes)</label
-          >
+        <label class="inline-flex items-center mb-1">
+          <input type="checkbox" v-model="quiz.is_timed" class="mr-2" />
+          Overall Time Limit (minutes)?
+        </label>
+        <div v-if="quiz.is_timed" class="ml-4 mt-2">
           <input
             type="number"
-            v-model="quiz.quiz_time_limit"
+            v-model.number="quiz.quiz_time_limit"
             min="1"
-            id="quizTimeLimit"
-            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+            class="input-field"
+            placeholder="Time limit in minutes"
           />
         </div>
       </div>
-      <div class="mb-4" v-if="quiz.quiz_type === 'standard'">
-        <label for="timePerQuestion" class="block text-lg font-semibold mb-2"
-          >Set Time Limit for Each Question (in seconds)</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.time_per_question"
-          id="timePerQuestion"
-        />
-        <div v-if="quiz.time_per_question" class="mt-4">
-          <label
-            for="questionTimeLimit"
-            class="block text-lg font-semibold mb-2"
-            >Time Limit per Question (in seconds)</label
-          >
+
+      <div v-if="quiz.quiz_type === 'standard'" class="mb-4">
+        <label class="inline-flex items-center mb-1">
+          <input
+            type="checkbox"
+            v-model="quiz.time_per_question"
+            class="mr-2"
+          />
+          Time Limit per Question (seconds)?
+        </label>
+        <div v-if="quiz.time_per_question" class="ml-4 mt-2">
           <input
             type="number"
-            v-model="quiz.question_time_limit"
+            v-model.number="quiz.question_time_limit"
             min="5"
-            id="questionTimeLimit"
-            class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300"
+            class="input-field"
+            placeholder="Time limit per question"
           />
         </div>
       </div>
-      <!-- Sharing Customization Options -->
+
+      <!-- 6. Misc Options -->
       <div class="mb-4">
-        <label for="displayResults" class="block text-lg font-semibold mb-2"
-          >Display Results After Quiz?</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.display_results"
-          id="displayResults"
-        />
+        <label class="inline-flex items-center mb-1">
+          <input type="checkbox" v-model="quiz.display_results" class="mr-2" />
+          Display Results Immediately After Quiz?
+        </label>
       </div>
+
       <div class="mb-4">
-        <label for="requirePassword" class="block text-lg font-semibold mb-2"
-          >Require Password to Access Quiz?</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.require_password"
-          id="requirePassword"
-        />
+        <label class="inline-flex items-center mb-1">
+          <input type="checkbox" v-model="quiz.require_password" class="mr-2" />
+          Password Protect This Quiz?
+        </label>
         <input
           v-if="quiz.require_password"
           type="password"
           v-model="quiz.password"
-          class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring focus:border-blue-300 mt-2"
-          placeholder="Enter password"
+          class="input-field mt-2"
+          placeholder="Enter quiz password"
         />
       </div>
+
       <div class="mb-4">
-        <label for="allowAnonymous" class="block text-lg font-semibold mb-2"
-          >Allow Anonymous Users?</label
-        >
-        <input
-          type="checkbox"
-          v-model="quiz.allow_anonymous"
-          id="allowAnonymous"
-        />
+        <label class="inline-flex items-center mb-1">
+          <input type="checkbox" v-model="quiz.allow_anonymous" class="mr-2" />
+          Allow Anonymous Users?
+        </label>
       </div>
-      <div class="mb-4">
-        <label for="requireName" class="block text-lg font-semibold mb-2"
-          >Require Name/Nickname?</label
-        >
-        <input type="checkbox" v-model="quiz.require_name" id="requireName" />
+
+      <div class="mb-6">
+        <label class="inline-flex items-center mb-1">
+          <input type="checkbox" v-model="quiz.require_name" class="mr-2" />
+          Require Participant Name/Nickname?
+        </label>
       </div>
+
       <button
         type="submit"
-        class="bg-blue-500 text-white px-6 py-3 rounded hover:bg-blue-700 w-full font-semibold mb-6"
+        class="w-full bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded font-semibold"
+        :disabled="loading"
       >
-        Generate Quiz
+        <span v-if="!loading">Create Quiz</span>
+        <span v-else>Creating...</span>
       </button>
     </form>
 
-    <!-- Loading spinner -->
-    <div v-if="loading" class="loading-container">
-      <div class="spinner"></div>
-      <p>Generating your quiz, please wait...</p>
+    <!-- Show spinner while AI is generating questions, if desired -->
+    <div v-if="loading" class="mt-4 text-center">
+      <div class="spinner mx-auto"></div>
+      <p class="mt-2">Generating your quiz with AI, please wait...</p>
     </div>
 
+    <!-- Generated questions preview -->
     <div v-if="questions.length" class="generated-questions mt-6">
-      <h2 class="text-2xl font-bold mb-4">Generated Questions</h2>
-      <div v-for="(question, index) in questions" :key="index" class="mb-6">
-        <h3 class="text-xl font-semibold mb-2">Question {{ index + 1 }}</h3>
-        <p class="mb-4">
-          <strong>Question Text:</strong> {{ question.question_text }}
-        </p>
-        <ul class="mb-4">
-          <li v-if="question.option_a">
-            <strong>A:</strong> {{ question.option_a }}
-          </li>
-          <li v-if="question.option_b">
-            <strong>B:</strong> {{ question.option_b }}
-          </li>
-          <li v-if="question.option_c">
-            <strong>C:</strong> {{ question.option_c }}
-          </li>
-          <li v-if="question.option_d">
-            <strong>D:</strong> {{ question.option_d }}
-          </li>
-          <li v-if="question.option_e">
-            <strong>E:</strong> {{ question.option_e }}
-          </li>
-        </ul>
-        <p><strong>Correct Answer:</strong> {{ question.correct_answer }}</p>
+      <h2 class="text-xl font-semibold mb-2">Generated Questions</h2>
+      <div
+        v-for="(question, index) in questions"
+        :key="index"
+        class="border-b border-gray-300 py-2"
+      >
+        <h3 class="font-semibold">Question {{ index + 1 }}</h3>
+        <p class="mt-1">{{ question.question_text }}</p>
+        <!-- If you want, list the options here: option_a, etc. -->
       </div>
-      <div class="space-y-2">
+      <!-- Buttons to go to Edit or Test the newly created quiz -->
+      <div class="mt-4 space-y-2">
         <button
           @click="goToEditPage"
-          type="button"
-          class="bg-yellow-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+          class="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-700"
         >
           Edit Quiz
         </button>
         <button
           @click="goToTestQuiz"
-          type="button"
-          class="bg-green-500 text-white px-6 py-3 rounded hover:bg-green-700 w-full font-semibold"
+          class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
         >
           Test Quiz
         </button>
@@ -284,133 +299,181 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 
+// If your app auto-loads from .env
+const apiBaseUrl =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+
 const router = useRouter()
 const authStore = useAuthStore()
+
+// Spinner/loading state
 const loading = ref(false)
+// Holds the AI-generated question previews
 const questions = ref([])
 let createdQuizId = null
 
-// Define a single reactive object to store all quiz details
+// Our big reactive object for quiz creation
 const quiz = ref({
+  // Basic
   title: '',
   topic: '',
-  question_count: 2, // Default to 2 questions
-  option_count: 2, // Default to 2 options per question
+
+  // New fields
+  evaluation_type: 'pre', // pre, hybrid, post
+  is_testing: false, // toggles "test-only" mode
+  is_published: false, // published or draft
+  access_control: 'public', // public, invitation, login_required
+
+  // AI generation
+  question_count: 5,
+  option_count: 4,
   use_knowledge_base: false,
   knowledge_base_text: '',
+
+  // Layout type
+  quiz_type: 'standard', // standard or stepwise
+  skippable_questions: true, // relevant if stepwise
+  stepwise_time_limit: null, // if !skippable
+
+  // Timers
+  is_timed: false,
+  quiz_time_limit: null,
+  time_per_question: false,
+  question_time_limit: null,
+
+  // Additional toggles
   display_results: true,
   require_password: false,
   password: '',
   allow_anonymous: false,
   require_name: false,
-  is_timed: false,
-  quiz_time_limit: null,
-  time_per_question: false,
-  question_time_limit: null,
-  quiz_type: 'standard', // Default quiz type is standard
-  skippable_questions: false,
-  stepwise_time_limit: null,
 })
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+/**
+ * If the user picks a file for knowledge base, read it into quiz.knowledge_base_text
+ */
+function handleFileUpload(evt) {
+  const file = evt.target.files?.[0]
+  if (!file) return
 
-// Handle file upload
-const handleFileUpload = event => {
-  const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = e => {
-      quiz.value.knowledge_base_text = e.target.result
-    }
-    reader.readAsText(file)
+  const reader = new FileReader()
+  reader.onload = e => {
+    quiz.value.knowledge_base_text = e.target?.result || ''
   }
+  reader.readAsText(file)
 }
 
-const createQuiz = async () => {
+/**
+ * Actually call your Django backend to create the quiz.
+ * This merges your new fields + old AI generation logic.
+ */
+async function createQuiz() {
   loading.value = true
   try {
-    const requestData = {
-      title: quiz.value.title,
-      topic: quiz.value.topic,
+    const payload = {
+      title: quiz.value.title.trim(),
+      topic: quiz.value.topic.trim(),
+
+      // new fields
+      evaluation_type: quiz.value.evaluation_type,
+      is_testing: quiz.value.is_testing,
+      is_published: quiz.value.is_published,
+      access_control: quiz.value.access_control,
+
+      // AI question gen fields
       question_count: quiz.value.question_count,
       option_count: quiz.value.option_count,
-      difficulty: 'medium',
-      display_results: quiz.value.display_results,
-      require_password: quiz.value.require_password,
-      password: quiz.value.require_password ? quiz.value.password : null,
-      allow_anonymous: quiz.value.allow_anonymous,
-      require_name: quiz.value.require_name,
-      is_timed: quiz.value.is_timed,
-      quiz_time_limit: quiz.value.is_timed ? quiz.value.quiz_time_limit : null,
-      time_per_question: quiz.value.time_per_question,
-      question_time_limit: quiz.value.time_per_question
-        ? quiz.value.question_time_limit
+      difficulty: 'medium', // or let user pick
+      knowledge_base: quiz.value.use_knowledge_base
+        ? quiz.value.knowledge_base_text
         : null,
+
+      // Layout & timers
       quiz_type: quiz.value.quiz_type,
-      allow_skipping:
+      skippable_questions:
         quiz.value.quiz_type === 'stepwise'
           ? quiz.value.skippable_questions
-          : null,
+          : false,
       stepwise_time_limit:
         quiz.value.quiz_type === 'stepwise' && !quiz.value.skippable_questions
           ? quiz.value.stepwise_time_limit
           : null,
-      account_id: authStore.account.id, // Include the account_id
+
+      is_timed: quiz.value.is_timed,
+      quiz_time_limit: quiz.value.is_timed ? quiz.value.quiz_time_limit : null,
+      are_questions_timed:
+        quiz.value.quiz_type === 'standard'
+          ? quiz.value.time_per_question
+          : false,
+      time_per_question: quiz.value.time_per_question
+        ? quiz.value.question_time_limit
+        : null,
+
+      // Additional toggles
+      display_results: quiz.value.display_results,
+      require_password: quiz.value.require_password,
+      password: quiz.value.require_password ? quiz.value.password : '',
+      allow_anonymous: quiz.value.allow_anonymous,
+      require_name: quiz.value.require_name,
+
+      // Make sure your backend can handle account_id
+      account_id: authStore.account?.id,
     }
 
-    if (quiz.value.use_knowledge_base) {
-      requestData.knowledge_base = quiz.value.knowledge_base_text
+    // POST to /quizzes/create/ with token
+    const res = await axios.post(`${apiBaseUrl}/quizzes/create/`, payload, {
+      headers: { Authorization: `Bearer ${authStore.token}` },
+    })
+
+    // If successful, we get the new quiz ID plus any AI-generated questions
+    if (!res.data.id) {
+      throw new Error('No quiz ID returned from backend.')
     }
 
-    const response = await axios.post(
-      `${apiBaseUrl}/quizzes/create/`,
-      requestData,
-      {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      },
-    )
-
-    if (response.data.id) {
-      createdQuizId = response.data.id
-      questions.value = response.data.questions || []
-      alert('Quiz generated successfully! Please review the questions below.')
-    } else {
-      throw new Error('Quiz ID not returned from backend.')
-    }
-  } catch (error) {
-    console.error('Error generating quiz:', error)
-    alert('Failed to generate quiz. Please try again.')
+    createdQuizId = res.data.id
+    questions.value = res.data.questions || []
+    alert('Quiz created successfully, see below for generated questions.')
+  } catch (err) {
+    console.error('Error creating quiz:', err)
+    alert('Failed to create quiz. See console for details.')
     questions.value = []
   } finally {
     loading.value = false
   }
 }
 
-const goToEditPage = () => {
-  if (createdQuizId) {
-    router.push({ name: 'EditQuiz', params: { id: createdQuizId } })
-  } else {
-    alert('No quiz has been created yet.')
+/**
+ * After creation, let user jump to Edit
+ */
+function goToEditPage() {
+  if (!createdQuizId) {
+    alert('No quiz has been created yet!')
+    return
   }
+  router.push({ name: 'EditQuiz', params: { id: createdQuizId } })
 }
 
-const goToTestQuiz = () => {
-  if (createdQuizId) {
-    router.push({ name: 'TestQuiz', params: { id: createdQuizId } })
-  } else {
-    alert('No quiz has been created yet.')
+/**
+ * Or go to the "TestQuiz" route
+ */
+function goToTestQuiz() {
+  if (!createdQuizId) {
+    alert('No quiz has been created yet!')
+    return
   }
+  router.push({ name: 'TestQuiz', params: { id: createdQuizId } })
 }
 </script>
 
 <style scoped>
 .create-quiz-container {
-  @apply mt-10;
+  margin-top: 2rem;
 }
 
-.loading-container {
-  text-align: center;
-  margin-top: 20px;
+/* Reuse your .input-field, .spinner, etc. as before */
+.input-field {
+  @apply w-full border border-gray-300 px-3 py-2 rounded focus:outline-none focus:ring;
+  margin-bottom: 0.5rem;
 }
 
 .spinner {

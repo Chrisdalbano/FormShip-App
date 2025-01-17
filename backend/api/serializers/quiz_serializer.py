@@ -1,11 +1,18 @@
 from rest_framework import serializers
 from ..models.quiz import Quiz, SharedQuiz
-from ..models.question import Question
+from ..models.quiz_invite import InvitedUser
+
+# from ..models.question import Question
 from .question_serializer import QuestionSerializer
 
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
+
+    evaluation_type = serializers.CharField()
+    is_testing = serializers.BooleanField()
+    is_published = serializers.BooleanField()
+    access_control = serializers.CharField()
 
     class Meta:
         model = Quiz
@@ -33,6 +40,12 @@ class QuizSerializer(serializers.ModelSerializer):
             "skippable_questions",
             "segment_steps",
             "allow_previous_questions",
+            "evaluation_type",
+            "is_testing",
+            "is_published",
+            "access_control",
+            # nested
+            "questions",
         ]
 
     def validate(self, data):
@@ -51,3 +64,10 @@ class SharedQuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = SharedQuiz
         fields = ["id", "quiz", "share_link", "requires_authentication", "shared_at"]
+
+
+class InvitedUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InvitedUser
+        fields = ["id", "quiz", "email", "invited_at", "has_responded"]
+        read_only_fields = ["invited_at", "has_responded"]

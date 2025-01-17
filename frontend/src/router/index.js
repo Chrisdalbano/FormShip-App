@@ -10,6 +10,8 @@ import AuthView from '@/views/AuthView.vue'
 import MyProfile from '@/views/MyProfile.vue'
 import AccountView from '@/views/AccountView.vue'
 import UsersView from '@/views/UsersView.vue'
+import QuizAdministration from '@/components/QuizAdministration.vue'
+import QuizAnalysis from '@/components/QuizAnalysis.vue'
 
 const fetchUsers = async (authStore) => {
   if (!authStore.account) return false
@@ -104,7 +106,21 @@ const routes = [
     component: UsersView,
     meta: { requiresAuth: true },
     beforeEnter: beforeEnterRoutesHandler
-  }
+  },
+  {
+    path: '/quiz/:id/admin',
+    name: 'QuizAdministration',
+    component: QuizAdministration,
+    meta: { requiresAuth: true },
+    beforeEnter: beforeEnterRoutesHandler
+  },
+  {
+    path: '/quiz/:id/analysis',
+    name: 'QuizAnalysis',
+    component: QuizAnalysis,
+    meta: { requiresAuth: true },
+    beforeEnter: beforeEnterRoutesHandler
+  },
 ]
 
 const router = createRouter({

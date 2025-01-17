@@ -4,6 +4,19 @@ from .user import Account
 
 
 class Quiz(models.Model):
+    EVALUATION_CHOICES = [
+        ("pre", "Pre-Evaluated"),
+        ("hybrid", "Hybrid"),
+        ("post", "Post-Evaluated"),
+    ]
+
+    ACCESS_CONTROL_CHOICES = [
+        ("public", "Public"),  # Anyone with the link can access
+        ("invitation", "Invitation"),  # Only invited users can access
+        ("login_required", "Login"),  # Must be a logged-in user
+        # You can add more if needed, e.g. domain-limited, etc.
+    ]
+
     account = models.ForeignKey(
         Account, related_name="quizzes", on_delete=models.CASCADE
     )  # Link quiz to account
@@ -29,6 +42,27 @@ class Quiz(models.Model):
     skippable_questions = models.BooleanField(default=True)
     segment_steps = models.BooleanField(default=False)
     allow_previous_questions = models.BooleanField(default=False)  # New field
+
+    evaluation_type = models.CharField(
+        max_length=10,
+        choices=EVALUATION_CHOICES,
+        default="pre",
+        help_text="Determines if the quiz is pre-evaluated, hybrid, or post-evaluated.",
+    )
+    is_testing = models.BooleanField(
+        default=False,
+        help_text="If True, quiz attempts won't be officially recorded in analytics/results.",
+    )
+    is_published = models.BooleanField(
+        default=False,
+        help_text="Indicates if the quiz is published (visible to participants).",
+    )
+    access_control = models.CharField(
+        max_length=20,
+        choices=ACCESS_CONTROL_CHOICES,
+        default="public",
+        help_text="Determines who can access the quiz.",
+    )
 
     def __str__(self):
         return self.title

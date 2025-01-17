@@ -25,6 +25,8 @@
       class="options-dropdown bg-gray-200 absolute top-full left-0 mt-2 p-4 rounded-lg shadow-md z-10"
     >
       <button @click="editQuiz" class="option-item">Edit</button>
+      <button @click="goToAnalysis(quiz.id)">View Analysis</button>
+      <button @click="goToAdminPanel(quiz.id)">Admin Panel</button>
       <button @click="duplicateQuiz" class="option-item">Duplicate</button>
       <button @click="deleteQuiz" class="option-item">Delete</button>
       <button v-if="group" @click="ungroupQuiz" class="option-item">
@@ -36,6 +38,9 @@
 
 <script setup>
 import { defineProps, defineEmits } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const props = defineProps({
   quiz: Object,
@@ -64,6 +69,14 @@ const duplicateQuiz = () => emit('duplicate-quiz', props.quiz.id)
 const deleteQuiz = () => emit('delete-quiz', props.quiz.id)
 const toggleMoreOptions = () => emit('toggle-options', props.quiz.id)
 const ungroupQuiz = () => emit('ungroup-quiz', props.quiz, props.group)
+
+const goToAnalysis = quizId => {
+  router.push({ name: 'QuizAnalysis', params: { id: quizId } })
+}
+
+const goToAdminPanel = quizId => {
+  router.push({ name: 'QuizAdministration', params: { id: quizId } })
+}
 </script>
 
 <style scoped>
@@ -92,6 +105,6 @@ const ungroupQuiz = () => emit('ungroup-quiz', props.quiz, props.group)
 }
 
 .options-dropdown > * {
-  border-bottom: 2px solid black
+  border-bottom: 2px solid black;
 }
 </style>
