@@ -83,7 +83,6 @@ const router = useRouter()
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 const authStore = useAuthStore()
 
-
 // Reactive state for ungrouped quizzes, selected quiz options, and expanded groups
 const ungroupedQuizzes = ref([])
 const selectedQuizId = ref(null)
@@ -156,7 +155,9 @@ const duplicateQuiz = async quizId => {
 const deleteQuiz = async quizId => {
   if (confirm('Are you sure you want to delete this quiz?')) {
     try {
-      await axios.delete(`${apiBaseUrl}/quizzes/${quizId}/`)
+      await axios.delete(`${apiBaseUrl}/quizzes/${quizId}/`, {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      })
 
       const group = groups.value.find(g => g.quizzes.some(q => q.id === quizId))
       if (group) {
