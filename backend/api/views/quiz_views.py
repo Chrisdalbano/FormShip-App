@@ -4,13 +4,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from ..services.quiz_creation_service import QuizCreationService, QuizCreationError
 
 # If you rely on OpenAI for quiz generation:
-from openai import OpenAI, APIError, APIConnectionError, RateLimitError
+from openai import OpenAI
 
 from ..models.user import AccountMembership
 
-from ..utils import parse_quiz_text
 from ..models.quiz import Quiz, SharedQuiz
 from ..models.group import Group
 from ..models.question import Question
@@ -65,146 +65,29 @@ def list_quizzes(request):
 @permission_classes([IsAuthenticated])
 def create_quiz(request):
     """
-    Creates a new quiz.
-    Always attempts AI generation unless user sets question_count=0, etc.
-    If 'knowledge_base' is provided, uses it to create a more specialized AI prompt;
-    otherwise uses a default prompt.
+    Creates a new quiz, optionally leveraging AI to generate questions.
     """
+    # 1) Ensure user has an account
+    account = request.user.accounts.first()
+    if not account:
+        return Response(
+            {"error": "No account associated with the user."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 2) Instantiate the service
+    service = QuizCreationService(openai_client=client)
+
     try:
-        account = request.user.accounts.first()
-        if not account:
-            return Response(
-                {"error": "No account associated with the user."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # 3) Use the service to parse, call AI, and create the quiz
+        quiz_obj, question_objs = service.create_quiz_with_ai(account, request.data)
 
-        # Basic required fields
-        title = request.data.get("title", "").strip()
-        topic = request.data.get("topic", "").strip()
-        if not title or not topic:
-            raise ValueError("Title and topic are required fields.")
+        # 4) Serialize and return
+        from ..serializers.quiz_serializer import QuizSerializer
+        from ..serializers.question_serializer import QuestionSerializer
 
-        # AI / question generation fields
-        question_count = int(request.data.get("question_count", 5))
-        option_count = int(request.data.get("option_count", 4))
-        difficulty = request.data.get("difficulty", "easy")
-        knowledge_base = request.data.get("knowledge_base", None)
-
-        # Additional quiz fields from older code
-        display_results = request.data.get("display_results", True)
-        require_password = request.data.get("require_password", False)
-        password = request.data.get("password", "")
-        allow_anonymous = request.data.get("allow_anonymous", False)
-        require_name = request.data.get("require_name", False)
-        is_timed = request.data.get("is_timed", False)
-        quiz_time_limit = (
-            int(request.data.get("quiz_time_limit", 0)) if is_timed else None
-        )
-        are_questions_timed = request.data.get("are_questions_timed", False)
-        time_per_question = (
-            int(request.data.get("time_per_question", 0))
-            if are_questions_timed
-            else None
-        )
-        quiz_type = request.data.get("quiz_type", "multiple-choice")
-        # If 'skippable_questions' is missing, default to True
-        skippable_questions = request.data.get("skippable_questions", True)
-        skippable_questions = bool(skippable_questions)
-        segment_steps = request.data.get("segment_steps", False)
-        allow_previous_questions = request.data.get("allow_previous_questions", False)
-
-        # New fields from "improvements"
-        evaluation_type = request.data.get(
-            "evaluation_type", "pre"
-        )  # pre / hybrid / post
-        is_testing = request.data.get("is_testing", False)
-        is_published = request.data.get("is_published", False)
-        access_control = request.data.get("access_control", "public")
-
-        # 1) Build an OpenAI prompt, with or without knowledge base
-        if knowledge_base:
-            prompt = (
-                f"Based on the following knowledge base, generate {question_count} {difficulty} "
-                f"multiple-choice questions about '{topic}' with {option_count} options each. "
-                f"Knowledge base: {knowledge_base}. "
-                f"Return JSON with 'questions': [{{question, options: {{A, B, ...}}, correct_answer}}]."
-            )
-        else:
-            # Default prompt if user doesn't supply knowledge_base
-            prompt = (
-                f"Generate {question_count} {difficulty} multiple-choice questions about '{topic}', "
-                f"with exactly {option_count} answer options labeled A-E. Return JSON with 'questions' array."
-            )
-
-        # 2) If question_count > 0, attempt AI generation
-        generated_text = ""
-        if question_count > 0:
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=1000,
-                    temperature=0.7,
-                )
-                generated_text = response.choices[0].message.content.strip()
-                print("Generated Text from OpenAI:", generated_text)
-            except (APIError, APIConnectionError, RateLimitError) as e:
-                # Non-fatal error: user can still create an empty quiz or handle it as needed
-                print("OpenAI error, continuing with empty quiz generation:", e)
-
-        # 3) Parse AI questions (if any)
-        parsed_questions = []
-        if generated_text:
-            parsed_questions = parse_quiz_text(
-                generated_text, "multiple-choice", option_count
-            )
-            # If parsing fails, you can decide to let it continue or raise an error
-            # e.g. raise ValueError("Failed to parse AI questions...")
-
-        # 4) Create quiz record
-        quiz_obj = Quiz.objects.create(
-            account=account,
-            title=title,
-            topic=topic,
-            difficulty=difficulty,
-            question_count=question_count,
-            display_results=display_results,
-            require_password=require_password,
-            password=password,
-            allow_anonymous=allow_anonymous,
-            require_name=require_name,
-            is_timed=is_timed,
-            quiz_time_limit=quiz_time_limit,
-            are_questions_timed=are_questions_timed,
-            time_per_question=time_per_question,
-            quiz_type=quiz_type,
-            skippable_questions=skippable_questions,
-            segment_steps=segment_steps,
-            allow_previous_questions=allow_previous_questions,
-            evaluation_type=evaluation_type,
-            is_testing=is_testing,
-            is_published=is_published,
-            access_control=access_control,
-        )
-
-        # 5) Create question records from parsed AI data
-        question_instances = []
-        for q in parsed_questions:
-            q_obj = Question.objects.create(
-                quiz=quiz_obj,
-                question_text=q.get("question_text", ""),
-                option_a=q.get("option_a"),
-                option_b=q.get("option_b"),
-                option_c=q.get("option_c"),
-                option_d=q.get("option_d"),
-                option_e=q.get("option_e"),
-                correct_answer=q.get("correct_answer", "A"),
-            )
-            question_instances.append(q_obj)
-
-        # 6) Serialize the newly created quiz and questions
         quiz_serializer = QuizSerializer(quiz_obj)
-        question_serializer = QuestionSerializer(question_instances, many=True)
+        question_serializer = QuestionSerializer(question_objs, many=True)
         data_out = {
             "quiz": quiz_serializer.data,
             "questions": question_serializer.data,
@@ -212,9 +95,13 @@ def create_quiz(request):
         }
         return Response(data_out, status=status.HTTP_201_CREATED)
 
-    except ValueError as ve:
-        return Response({"error": str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+    except ValueError as e:
+        # e.g. missing fields or parse errors
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except QuizCreationError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as exc:
+        # Catch all other unexpected errors
         print(f"Unexpected error in create_quiz: {exc}")
         return Response(
             {"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -233,8 +120,7 @@ def quiz_detail(request, quiz_id):
     if request.method in ["PUT", "DELETE"]:
         # 1) Find membership for request.user in the quiz's account
         membership = AccountMembership.objects.filter(
-            account=quiz_obj.account,
-            user=request.user
+            account=quiz_obj.account, user=request.user
         ).first()
 
         # 2) If membership doesn't exist or role isn't "owner"/"admin", forbid
@@ -285,6 +171,7 @@ def quiz_detail(request, quiz_id):
     elif request.method == "DELETE":
         quiz_obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 @api_view(["POST"])
 def duplicate_quiz(request, quiz_id):
