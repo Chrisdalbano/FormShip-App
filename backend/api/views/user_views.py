@@ -15,6 +15,7 @@ from ..serializers.user_serializer import (
     UserResultSerializer,
 )
 from ..serializers.account_serializer import AccountMembershipSerializer
+from ..utils.generate_prefixed_uuid import generate_prefixed_uuid
 
 
 class MyTokenObtainPairView(TokenObtainPairView):
@@ -210,7 +211,7 @@ def list_account_members(request, account_id):
 def create_user(request, account_id):
     account = get_object_or_404(Account, id=account_id)
 
-    # Permission check
+    # Permissions check
     if (
         request.user != account.owner
         and not AccountMembership.objects.filter(
@@ -232,23 +233,34 @@ def create_user(request, account_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Generate a unique ID for the user
+    for _ in range(5):  # Retry up to 5 times
+        user_id = generate_prefixed_uuid("u")
+        if not User.objects.filter(id=user_id).exists():
+            break
+    else:
+        return Response(
+            {"error": "Failed to generate unique user ID."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
     # Create or retrieve the user
-    user, created = User.objects.get_or_create(email=email)
-
-    if created:
-        user.set_password(password)  # Ensure the password is hashed
-        user.save()
-
-    # Validate and create AccountMembership
-    membership, membership_created = AccountMembership.objects.get_or_create(
-        account=account,
-        user=user,
-        defaults={"role": role},
+    user, created = User.objects.get_or_create(
+        email=email,
+        defaults={"password": password, "id": user_id},  # Use generated ID
     )
 
-    if not membership_created and membership.account != account:
+    if created:
+        user.set_password(password)
+        user.save()
+
+    membership, created = AccountMembership.objects.get_or_create(
+        account=account, user=user, defaults={"role": role}
+    )
+
+    if not created:
         return Response(
-            {"error": "User is already a member of another account."},
+            {"error": "User is already a member of this account."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

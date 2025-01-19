@@ -27,7 +27,7 @@ urlpatterns = [
     path("set-password/", set_password, name="set_password"),
     path("<int:account_id>/create-user/", create_user, name="create_user"),
     path(
-        "<int:account_id>/users/<int:user_id>/",
+        "<int:account_id>/users/<str:user_id>/",
         manage_user,
         name="manage_user",
     ),

@@ -1,6 +1,7 @@
 from django.db import models
 from .group import Group
 from .user import Account
+from ..utils import generate_prefixed_uuid
 
 
 class Quiz(models.Model):
@@ -17,9 +18,20 @@ class Quiz(models.Model):
         # You can add more if needed, e.g. domain-limited, etc.
     ]
 
+    id = models.CharField(
+        max_length=36,  #
+        primary_key=True,
+        default=generate_prefixed_uuid("q"),
+        editable=False,
+    )
+
     account = models.ForeignKey(
         Account, related_name="quizzes", on_delete=models.CASCADE
-    )  # Link quiz to account
+    )
+
+    account = models.ForeignKey(
+        Account, related_name="quizzes", on_delete=models.CASCADE
+    )
     group = models.ForeignKey(
         Group, related_name="quizzes", on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -35,28 +47,24 @@ class Quiz(models.Model):
     require_name = models.BooleanField(default=False)
     quiz_type = models.CharField(max_length=50, default="multiple-choice")
     created_at = models.DateTimeField(auto_now_add=True)
-    quiz_time_limit = models.IntegerField(null=True, blank=True)  # in minutes
-    are_questions_timed = models.BooleanField(default=False)  # New field
-    time_per_question = models.IntegerField(null=True, blank=True)  # in seconds
+    quiz_time_limit = models.IntegerField(null=True, blank=True)
+    are_questions_timed = models.BooleanField(default=False)
+    time_per_question = models.IntegerField(null=True, blank=True)
     is_timed = models.BooleanField(default=False)
     skippable_questions = models.BooleanField(default=True)
     segment_steps = models.BooleanField(default=False)
-    allow_previous_questions = models.BooleanField(default=False)  # New field
-
+    allow_previous_questions = models.BooleanField(default=False)
     evaluation_type = models.CharField(
         max_length=10,
-        choices=EVALUATION_CHOICES,
+        choices=[
+            ("pre", "Pre-Evaluated"),
+            ("hybrid", "Hybrid"),
+            ("post", "Post-Evaluated"),
+        ],
         default="pre",
-        help_text="Determines if the quiz is pre-evaluated, hybrid, or post-evaluated.",
     )
-    is_testing = models.BooleanField(
-        default=False,
-        help_text="If True, quiz attempts won't be officially recorded in analytics/results.",
-    )
-    is_published = models.BooleanField(
-        default=False,
-        help_text="Indicates if the quiz is published (visible to participants).",
-    )
+    is_testing = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False)
     access_control = models.CharField(
         max_length=20,
         choices=ACCESS_CONTROL_CHOICES,
@@ -69,6 +77,12 @@ class Quiz(models.Model):
 
 
 class SharedQuiz(models.Model):
+    id = models.CharField(
+        max_length=36,  #
+        primary_key=True,
+        default=generate_prefixed_uuid("sh"),
+        editable=False,
+    )
     quiz = models.ForeignKey(
         Quiz, on_delete=models.CASCADE, related_name="shared_quizzes"
     )

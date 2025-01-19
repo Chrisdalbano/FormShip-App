@@ -1,10 +1,12 @@
 from django.core.mail import send_mail
+from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 import logging
+from ..utils.generate_prefixed_uuid import generate_prefixed_uuid
 
 from ..models.user import Account, AccountMembership, User
 from ..serializers.account_serializer import (
@@ -13,6 +15,7 @@ from ..serializers.account_serializer import (
     TransferOwnershipSerializer,
 )
 from ..serializers.user_serializer import UserSerializer
+
 
 
 @api_view(["POST"])
@@ -27,8 +30,6 @@ def create_account(request):
         account = serializer.save(owner=user)
         AccountMembership.objects.create(account=account, user=user, role="owner")
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -158,6 +159,7 @@ def set_password(request):
 def create_user(request, account_id):
     account = get_object_or_404(Account, id=account_id)
 
+    # Permission check
     if (
         request.user != account.owner
         and not AccountMembership.objects.filter(
@@ -179,11 +181,20 @@ def create_user(request, account_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Create or retrieve the user
-    user, created = User.objects.get_or_create(
-        email=email,
-        defaults={"password": password},  # `username` will be auto-generated
-    )
+    # Ensure unique ID assignment
+    try:
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                "id": generate_prefixed_uuid("u"),  # Generate a unique ID
+                "password": password,
+            },
+        )
+    except IntegrityError as e:
+        return Response(
+            {"error": f"Database error: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     if created:
         user.set_password(password)  # Ensure the password is hashed

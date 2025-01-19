@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from ..serializers.user_serializer import UserSerializer
 from ..models.user import Account, AccountMembership, User
 
 
@@ -14,14 +16,20 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class AccountMembershipSerializer(serializers.ModelSerializer):
+    account = serializers.PrimaryKeyRelatedField(read_only=True)
+    user = UserSerializer(read_only=True)
     user_email = serializers.EmailField(source="user.email")
     user_name = serializers.CharField(source="user.get_full_name", allow_blank=True)
-    user_id = serializers.IntegerField(source="user.id")  # Add this field explicitly
+    user_id = serializers.CharField(
+        source="user.id"
+    )  # Changed from IntegerField to CharField
 
     class Meta:
         model = AccountMembership
         fields = [
-            "user_id",  
+            "user",
+            "account",
+            "user_id",
             "user_email",
             "user_name",
             "role",

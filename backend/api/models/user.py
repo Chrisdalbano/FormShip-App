@@ -1,5 +1,6 @@
 from django.db import models
-from django.contrib.auth.models import User, AbstractUser, Group, Permission
+from django.contrib.auth.models import AbstractUser, Group, Permission
+from ..utils import generate_prefixed_uuid
 
 # from .quiz import Quiz
 from django.conf import settings
@@ -91,6 +92,12 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
+    id = models.CharField(
+        max_length=36,  #
+        primary_key=True,
+        default=generate_prefixed_uuid("u"),
+        editable=False,
+    )
     email = models.EmailField(unique=True)  # Email serves as the unique identifier
     username = models.CharField(
         max_length=150, unique=True, blank=True
@@ -111,6 +118,7 @@ class User(AbstractUser):
         null=True,
     )
 
+    # Retaining groups and user_permissions
     groups = models.ManyToManyField(
         Group,
         related_name="api_user_groups",
@@ -139,3 +147,4 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+ 
