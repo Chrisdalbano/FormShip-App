@@ -1,4 +1,6 @@
-from django.urls import path
+from django.urls import include, path
+from ..views.attempt_views import get_attempts
+
 from ..views.quiz_views import (
     list_quizzes,
     create_quiz,
@@ -17,4 +19,6 @@ urlpatterns = [
     path("<str:quiz_id>/share/", share_quiz, name="share_quiz"),
     path("<str:quiz_id>/move-to-group/", move_quiz_to_group, name="move_quiz_to_group"),
     path("update-order/", update_quiz_order, name="update_quiz_order"),
+    path("participants/", include("api.urls.participant_urls")),
+    path("<str:quiz_id>/attempts/", get_attempts, name="quiz-attempts"),
 ]
