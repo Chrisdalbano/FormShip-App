@@ -2,6 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '@/store/auth';
 import router from '@/router';
 
+// Named export for `useAxios`
 export const useAxios = () => {
     const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
 

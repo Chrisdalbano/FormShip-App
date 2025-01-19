@@ -14,15 +14,27 @@
         v-if="
           quiz.evaluation_type === 'post' || quiz.evaluation_type === 'hybrid'
         "
+        class="mb-6"
       >
         <h2 class="text-xl font-semibold mb-2">Awaiting Manual Grading</h2>
         <div
-          v-for="attempt in attempts"
+          v-for="attempt in attempts.filter(a => a.needs_manual_grading)"
           :key="attempt.id"
           class="border p-2 mb-2"
         >
           <p class="font-bold">
-            User: {{ attempt.participant_name || 'Anonymous' }}
+            User:
+            <router-link
+              v-if="attempt.participant_id"
+              :to="{
+                name: 'ParticipantDetails',
+                params: { id: attempt.participant_id },
+              }"
+              class="text-blue-500 underline hover:text-blue-700"
+            >
+              {{ attempt.participant_name || 'Anonymous' }}
+            </router-link>
+            <span v-else>{{ attempt.participant_name || 'Anonymous' }}</span>
           </p>
           <p>Score: {{ attempt.partial_score }} (auto-graded so far)</p>
           <button
@@ -47,7 +59,19 @@
         </thead>
         <tbody>
           <tr v-for="attempt in attempts" :key="attempt.id" class="border-b">
-            <td class="px-2 py-1">{{ attempt.participant_name || 'Anon' }}</td>
+            <td class="px-2 py-1">
+              <router-link
+                v-if="attempt.participant_id"
+                :to="{
+                  name: 'ParticipantDetails',
+                  params: { id: attempt.participant_id },
+                }"
+                class="text-blue-500 underline hover:text-blue-700"
+              >
+                {{ attempt.participant_name || 'Anonymous' }}
+              </router-link>
+              <span v-else>{{ attempt.participant_name || 'Anonymous' }}</span>
+            </td>
             <td class="px-2 py-1">{{ attempt.final_score ?? 'N/A' }}</td>
             <td class="px-2 py-1">{{ attempt.completed_at }}</td>
             <td class="px-2 py-1">
@@ -94,7 +118,6 @@ const fetchQuiz = async () => {
 
 const fetchAttempts = async () => {
   try {
-    // Assume you have an endpoint like /api/quizzes/:id/attempts/ returning a list
     const res = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/attempts/`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
