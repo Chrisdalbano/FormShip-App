@@ -8,6 +8,7 @@
       Create a new quiz or manage your existing quizzes below.
     </p>
 
+    <!-- Buttons for creating quiz or group -->
     <div class="button-container mb-6 flex gap-4">
       <button @click="navigateToCreateQuiz" class="create-quiz-btn">
         Create New Quiz
@@ -17,6 +18,7 @@
       </button>
     </div>
 
+    <!-- Grouped Quizzes -->
     <div
       v-if="groups && groups.length"
       class="group-list grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
@@ -26,11 +28,10 @@
         :key="group.id"
         :group="group"
         :isExpanded="expandedGroups.includes(group.id)"
-        :selectedQuizId="selectedQuizId"
         @rename-group="renameGroup"
         @delete-group="deleteGroup"
-        @toggle-expand="toggleGroupExpand"
         @update-color="updateGroupColorFront"
+        @toggle-expand="toggleGroupExpand"
         @drag-start="handleDragStart"
         @drop="handleDrop"
         @navigate-quiz="navigateToQuiz"
@@ -38,10 +39,10 @@
         @duplicate-quiz="duplicateQuiz"
         @delete-quiz="deleteQuiz"
         @ungroup-quiz="ungroupQuiz"
-        @toggle-options="toggleMoreOptions"
       />
     </div>
 
+    <!-- Ungrouped Quizzes -->
     <div
       v-if="ungroupedQuizzes && ungroupedQuizzes.length"
       class="ungrouped-quizzes mt-8"
@@ -71,7 +72,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../store/auth'
-
 import { useRouter } from 'vue-router'
 import useGroupApi from '../composables/useGroupApi'
 import useDragAndDrop from '../composables/useDragAndDrop'
@@ -80,15 +80,15 @@ import QuizCard from '../components/QuizCard.vue'
 import axios from 'axios'
 
 const router = useRouter()
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 const authStore = useAuthStore()
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
 
-// Reactive state for ungrouped quizzes, selected quiz options, and expanded groups
+// Reactive state
 const ungroupedQuizzes = ref([])
 const selectedQuizId = ref(null)
 const expandedGroups = ref([])
 
-// Group API composable
+// Group and Drag-and-Drop APIs
 const {
   groups,
   fetchGroups,
@@ -98,7 +98,6 @@ const {
   deleteGroup,
 } = useGroupApi(apiBaseUrl)
 
-// Drag-and-Drop composable
 const { handleDragStart, handleDrop } = useDragAndDrop(
   apiBaseUrl,
   ungroupedQuizzes,
@@ -121,9 +120,7 @@ const fetchUngroupedQuizzes = async () => {
   try {
     const response = await axios.get(
       `${apiBaseUrl}/quizzes/?grouped=false&account_id=${authStore.account.id}`,
-      {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      },
+      { headers: { Authorization: `Bearer ${authStore.token}` } },
     )
     ungroupedQuizzes.value = response.data
   } catch (error) {
@@ -131,14 +128,56 @@ const fetchUngroupedQuizzes = async () => {
   }
 }
 
-// Duplicate a quiz
+// Quiz actions
+const navigateToCreateQuiz = () => router.push({ name: 'CreateQuiz' })
+const editQuiz = quizId =>
+  router.push({ name: 'EditQuiz', params: { id: quizId } })
+const navigateToQuiz = quizId =>
+  router.push({ name: 'QuizEvent', params: { id: quizId } })
+
+// Group actions
+const promptCreateGroup = () => {
+  const name = prompt('Enter the name for the new group:')
+  if (name && name.trim() !== '') {
+    createGroup(name.trim())
+  }
+}
+
+const renameGroup = group => {
+  const newName = prompt('Enter the new name for the group:', group.name)
+  if (newName && newName.trim() !== '') {
+    updateGroupName(group.id, newName.trim())
+  }
+}
+
+const updateGroupColorFront = async group => {
+  const newColor = prompt('Enter a new color (e.g., #FF5733):', group.color)
+  if (newColor && newColor.trim() !== '') {
+    try {
+      await updateGroupColor(group.id, newColor.trim())
+      group.color = newColor // Update immediately for UI feedback
+    } catch (error) {
+      console.error('Error updating group color:', error)
+    }
+  }
+}
+
+const toggleGroupExpand = groupId => {
+  if (expandedGroups.value.includes(groupId)) {
+    expandedGroups.value = expandedGroups.value.filter(id => id !== groupId)
+  } else {
+    expandedGroups.value.push(groupId)
+  }
+}
+
 const duplicateQuiz = async quizId => {
   try {
     const response = await axios.post(
       `${apiBaseUrl}/quizzes/${quizId}/duplicate/`,
+      null,
+      { headers: { Authorization: `Bearer ${authStore.token}` } },
     )
     const duplicatedQuiz = response.data
-
     const group = groups.value.find(g => g.quizzes.some(q => q.id === quizId))
     if (group) {
       group.quizzes.push(duplicatedQuiz)
@@ -147,11 +186,9 @@ const duplicateQuiz = async quizId => {
     }
   } catch (error) {
     console.error('Error duplicating quiz:', error)
-    alert('Failed to duplicate quiz. Please try again.')
   }
 }
 
-// Delete a quiz
 const deleteQuiz = async quizId => {
   if (confirm('Are you sure you want to delete this quiz?')) {
     try {
@@ -169,72 +206,19 @@ const deleteQuiz = async quizId => {
       }
     } catch (error) {
       console.error('Error deleting quiz:', error)
-      alert('Failed to delete quiz. Please try again.')
     }
   }
 }
 
-// Ungroup a quiz
 const ungroupQuiz = async (quiz, group) => {
   group.quizzes = group.quizzes.filter(q => q.id !== quiz.id)
   ungroupedQuizzes.value.push(quiz)
-
   try {
     await axios.put(`${apiBaseUrl}/quizzes/${quiz.id}/move-to-group/`, {
       group_id: null,
     })
   } catch (error) {
     console.error('Error ungrouping quiz:', error)
-    alert('Failed to ungroup quiz. Please try again.')
-  }
-}
-
-// Additional actions for navigation and group management
-const navigateToCreateQuiz = () => router.push({ name: 'CreateQuiz' })
-const editQuiz = quizId =>
-  router.push({ name: 'EditQuiz', params: { id: quizId } })
-const navigateToQuiz = quizId =>
-  router.push({ name: 'TestQuiz', params: { id: quizId } })
-
-// Prompt to create a new group
-const promptCreateGroup = () => {
-  const name = prompt('Enter the name for the new group:')
-  if (name && name.trim() !== '') {
-    createGroup(name.trim())
-  }
-}
-
-// Rename group
-const renameGroup = group => {
-  const newName = prompt('Enter the new name for the group:', group.name)
-  if (newName && newName.trim() !== '') {
-    updateGroupName(group.id, newName.trim())
-  }
-}
-
-// Update group color
-const updateGroupColorFront = async group => {
-  const newColor = prompt(
-    'Enter the new color for the group (e.g., #FF5733):',
-    group.color,
-  )
-  if (newColor && newColor.trim() !== '') {
-    try {
-      await updateGroupColor(group.id, newColor.trim())
-      group.color = newColor // Update the color locally for immediate UI feedback
-    } catch (error) {
-      console.error('Error updating group color:', error)
-      alert('Failed to update group color. Please try again.')
-    }
-  }
-}
-
-// Toggle expanded state of a group
-const toggleGroupExpand = groupId => {
-  if (expandedGroups.value.includes(groupId)) {
-    expandedGroups.value = expandedGroups.value.filter(id => id !== groupId)
-  } else {
-    expandedGroups.value.push(groupId)
   }
 }
 </script>

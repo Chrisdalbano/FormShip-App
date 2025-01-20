@@ -47,9 +47,6 @@ class Account(models.Model):
         on_delete=models.CASCADE,
         related_name="owned_accounts",
     )
-    members = models.ManyToManyField(
-        settings.AUTH_USER_MODEL, through="AccountMembership", related_name="accounts"
-    )
 
     def transfer_ownership(self, new_owner):
         self.owner = new_owner
@@ -147,4 +144,3 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
- 

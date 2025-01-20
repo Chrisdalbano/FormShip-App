@@ -1,58 +1,28 @@
 <template>
   <div class="zen-container">
-    <h1>{{ quiz_type === 'stepwise' ? 'Stepwise Quiz' : 'Test Quiz' }}</h1>
+    <!-- Quiz Title -->
+    <h1>{{ quiz_type === 'stepwise' ? 'Stepwise Quiz' : 'Quiz' }}</h1>
 
-    <!-- Password Prompt -->
-    <div
-      v-if="quiz && quiz.require_password && !passwordValidated && !showResults"
-    >
-      <h2>Enter Password to Access Quiz</h2>
-      <input
-        type="password"
-        v-model="enteredPassword"
-        placeholder="Enter password"
-        class="input-field"
-      />
-      <button @click="validatePassword" class="action-button">
-        Submit Password
-      </button>
-      <p v-if="passwordError" class="error-text">
-        Incorrect password. Please try again.
-      </p>
-    </div>
+    <!-- Loading State -->
+    <p v-if="!quiz && !showResults">Loading quiz...</p>
 
-    <!-- Name Prompt -->
-    <div
-      v-else-if="quiz && quiz.require_name && !userNameProvided && !showResults"
-    >
-      <h2>Enter Your Name or Nickname</h2>
-      <input
-        type="text"
-        v-model="userName"
-        placeholder="Enter your name"
-        class="input-field"
-      />
-      <button @click="submitName" class="action-button">Submit Name</button>
-    </div>
+    <!-- Quiz Content (only if we have quiz data & haven't submitted yet) -->
+    <div v-else-if="quiz && !showResults" class="quiz-container">
+      <h2 class="quiz-title">{{ quiz.title }}</h2>
+      <p class="quiz-topic">Topic: {{ quiz.topic }}</p>
 
-    <!-- Quiz Content -->
-    <div
-      v-else-if="quiz && !showResults && passwordValidated && userNameProvided"
-    >
-      <h2>{{ quiz.title }}</h2>
-      <p>Topic: {{ quiz.topic }}</p>
-
-      <div v-if="quiz.is_timed && quizTimeRemaining > 0">
+      <!-- Overall Timer for Timed Quiz -->
+      <div v-if="quiz.is_timed && quizTimeRemaining > 0" class="quiz-timer">
         <p class="timer-text">Time Remaining: {{ formattedQuizTime }}</p>
       </div>
 
       <!-- Stepwise Mode -->
       <div v-if="quiz_type === 'stepwise'" class="stepwise-quiz">
         <div class="question-block">
-          <p>
+          <p class="question-text">
             {{ currentQuestionIndex + 1 }}. {{ currentQuestion.question_text }}
           </p>
-          <div>
+          <div class="option-group">
             <label v-if="currentQuestion.option_a">
               <input
                 type="radio"
@@ -99,7 +69,12 @@
               E. {{ currentQuestion.option_e }}
             </label>
           </div>
-          <div v-if="quiz.time_per_question && questionTimer > 0" class="mt-2">
+
+          <!-- Per-Question Timer -->
+          <div
+            v-if="quiz.time_per_question && questionTimer > 0"
+            class="question-timer"
+          >
             <p class="text-red-600">
               Time Remaining for Question: {{ formattedQuestionTime }}
             </p>
@@ -110,24 +85,28 @@
         <div class="navigation-buttons mt-4">
           <button
             @click="goToNextQuestion"
-            class="bg-blue-500 text-white px-4 py-2 rounded"
+            class="btn btn-primary"
             :disabled="!canAdvanceToNext"
           >
             Next
           </button>
           <button
-            v-if="currentQuestionIndex > 0 && !quiz.time_per_question"
+            v-if="
+              currentQuestionIndex > 0 &&
+              !quiz.time_per_question &&
+              quiz.allow_previous_questions
+            "
             @click="goToPreviousQuestion"
-            class="bg-gray-500 text-white px-4 py-2 rounded ml-2"
+            class="btn btn-secondary ml-2"
           >
             Previous
           </button>
           <button
             v-if="isLastQuestion"
             @click="submitAnswers"
-            class="bg-green-500 text-white px-4 py-2 rounded ml-2"
+            class="btn btn-success ml-2"
           >
-            Submit Answers
+            Submit
           </button>
         </div>
       </div>
@@ -139,8 +118,10 @@
           :key="index"
           class="question-block"
         >
-          <p>{{ index + 1 }}. {{ question.question_text }}</p>
-          <div>
+          <p class="question-text">
+            {{ index + 1 }}. {{ question.question_text }}
+          </p>
+          <div class="option-group">
             <label v-if="question.option_a">
               <input
                 type="radio"
@@ -188,28 +169,22 @@
             </label>
           </div>
         </div>
-        <button
-          @click="submitAnswers"
-          class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-        >
-          Submit Answers
+        <button @click="submitAnswers" class="btn btn-primary mt-4">
+          Submit
         </button>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <p v-else-if="!quiz && !showResults">Loading quiz...</p>
-
-    <!-- Results Section -->
-    <div v-if="showResults">
-      <ResultsView
-        :score="score"
-        :totalQuestions="totalQuestions"
-        :questions="quiz.questions"
-        :userAnswers="userAnswers"
-        :xpEarned="calculateXPEarned(score)"
-      />
-    </div>
+    <!-- Completed/Results Section -->
+    <CompletedQuiz
+      v-if="showResults && quiz"
+      :quiz="quiz"
+      :score="score"
+      :totalQuestions="totalQuestions"
+      :questions="quiz.questions"
+      :userAnswers="userAnswers"
+      @retakeQuiz="retakeQuiz"
+    />
   </div>
 </template>
 
@@ -217,48 +192,61 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
-import ResultsView from './ResultsView.vue'
+
+// The new or renamed results component:
+import CompletedQuiz from '../components/CompletedQuiz.vue'
 
 const route = useRoute()
 const quiz = ref(null)
+
+// Participant or attempt info (optional)
+const participantId = ref(null)
+
+// Array for storing user’s chosen answers
 const userAnswers = ref([])
-const score = ref(0)
+
+// Quiz meta
 const showResults = ref(false)
+const score = ref(0)
 const quizId = route.params.id
 const quiz_type = ref('all-at-once')
+
+// Stepwise
+const currentQuestionIndex = ref(0)
+const currentQuestion = computed(() =>
+  quiz.value && quiz.value.questions
+    ? quiz.value.questions[currentQuestionIndex.value]
+    : {},
+)
+
+// Timers
+const quizTimeRemaining = ref(0)
+const questionTimer = ref(0)
 
 const apiBaseUrl =
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
-// Password and Name State
-const passwordValidated = ref(false)
-const enteredPassword = ref('')
-const passwordError = ref(false)
-const userName = ref('')
-const userNameProvided = ref(false)
-
-// Timer States
-const quizTimeRemaining = ref(0)
-let questionTimer = ref(0)
-const currentQuestionIndex = ref(0)
-const currentQuestion = computed(
-  () => quiz.value.questions[currentQuestionIndex.value],
-)
-
+// Lifecycle
 onMounted(async () => {
+  // 1) Optionally load participant ID from localStorage or another source
+  participantId.value =
+    localStorage.getItem(`quiz_${quizId}_participant_id`) || null
+
+  // 2) Fetch the quiz data
   try {
     const response = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`)
     quiz.value = response.data
     userAnswers.value = Array(response.data.questions.length).fill(null)
-    passwordValidated.value = !quiz.value.require_password
-    userNameProvided.value = !quiz.value.require_name
     quiz_type.value =
       quiz.value.quiz_type === 'stepwise' ? 'stepwise' : 'all-at-once'
 
-    if (quiz.value.is_timed) {
-      quizTimeRemaining.value = quiz.value.quiz_time_limit * 60
+    // If the quiz is timed
+    if (quiz.value.is_timed && quiz.value.quiz_time_limit) {
+      quizTimeRemaining.value = quiz.value.quiz_time_limit * 60 // convert min -> sec
       startQuizTimer()
     }
+
+    // If each question is timed
     if (quiz.value.time_per_question) {
       questionTimer.value = quiz.value.time_per_question
       startQuestionTimer()
@@ -268,7 +256,8 @@ onMounted(async () => {
   }
 })
 
-const startQuizTimer = () => {
+// Timer functions
+function startQuizTimer() {
   const timer = setInterval(() => {
     if (quizTimeRemaining.value > 0) {
       quizTimeRemaining.value--
@@ -279,12 +268,13 @@ const startQuizTimer = () => {
   }, 1000)
 }
 
-const startQuestionTimer = () => {
+function startQuestionTimer() {
   const timer = setInterval(() => {
     if (questionTimer.value > 0) {
       questionTimer.value--
     } else {
       clearInterval(timer)
+      // Move on automatically or submit, depending on logic
       if (!isLastQuestion.value) {
         goToNextQuestion()
       } else {
@@ -294,24 +284,11 @@ const startQuestionTimer = () => {
   }, 1000)
 }
 
-const validatePassword = () => {
-  if (enteredPassword.value === quiz.value.password) {
-    passwordValidated.value = true
-    passwordError.value = false
-  } else {
-    passwordError.value = true
-  }
-}
-
-const submitName = () => {
-  if (userName.value.trim()) {
-    userNameProvided.value = true
-  }
-}
-
-const goToNextQuestion = () => {
+// Navigation
+function goToNextQuestion() {
   if (currentQuestionIndex.value < quiz.value.questions.length - 1) {
     currentQuestionIndex.value++
+    // Reset question timer if needed
     if (quiz.value.time_per_question) {
       questionTimer.value = quiz.value.time_per_question
       startQuestionTimer()
@@ -319,26 +296,62 @@ const goToNextQuestion = () => {
   }
 }
 
-// Updated: Prevent going back if the questions are timed
-const goToPreviousQuestion = () => {
+function goToPreviousQuestion() {
+  // Only allowed if quiz.allow_previous_questions = true and not timed per question
   if (currentQuestionIndex.value > 0 && !quiz.value.time_per_question) {
     currentQuestionIndex.value--
   }
 }
 
-const submitAnswers = () => {
+// Submitting
+function submitAnswers() {
   calculateScore()
+  // Optionally push attempt/score to the backend
+  sendAttemptToBackend()
+
+  // Show results or “completed” screen
   showResults.value = true
 }
 
-const calculateScore = () => {
+// Example method to post the attempt/score
+async function sendAttemptToBackend() {
+  if (!participantId.value) return
+  try {
+    await axios.post(`${apiBaseUrl}/attempts/submit/`, {
+      participant_id: participantId.value,
+      quiz_id: quizId,
+      score: score.value,
+      answers: userAnswers.value,
+    })
+  } catch (err) {
+    console.error('Error sending attempt data:', err)
+  }
+}
+
+function calculateScore() {
+  if (!quiz.value) return
   score.value = userAnswers.value.filter(
     (answer, index) => answer === quiz.value.questions[index].correct_answer,
   ).length
 }
 
-const calculateXPEarned = score => score * 10 // Adjust XP logic as needed
+function retakeQuiz() {
+  // If you want a “retake” button in CompletedQuiz.vue
+  showResults.value = false
+  score.value = 0
+  currentQuestionIndex.value = 0
+  userAnswers.value = Array(quiz.value.questions.length).fill(null)
+  if (quiz.value.time_per_question) {
+    questionTimer.value = quiz.value.time_per_question
+    startQuestionTimer()
+  }
+  if (quiz.value.is_timed && quiz.value.quiz_time_limit) {
+    quizTimeRemaining.value = quiz.value.quiz_time_limit * 60
+    startQuizTimer()
+  }
+}
 
+// Computed
 const formattedQuizTime = computed(() => {
   const minutes = Math.floor(quizTimeRemaining.value / 60)
   const seconds = quizTimeRemaining.value % 60
@@ -352,46 +365,81 @@ const formattedQuestionTime = computed(() => {
 })
 
 const isLastQuestion = computed(() => {
-  return currentQuestionIndex.value === quiz.value.questions.length - 1
+  return quiz.value
+    ? currentQuestionIndex.value === quiz.value.questions.length - 1
+    : false
 })
 
 const canAdvanceToNext = computed(() => {
-  return userAnswers[currentQuestionIndex.value] !== null
+  return userAnswers.value[currentQuestionIndex.value] !== null
 })
+
+const totalQuestions = computed(() => quiz.value?.questions?.length || 0)
 </script>
 
 <style scoped>
 .zen-container {
   max-width: 800px;
   margin: auto;
+  padding: 1rem;
 }
-.input-field {
-  border: 1px solid #ddd;
-  padding: 10px;
-  border-radius: 5px;
-  width: 100%;
-  margin-bottom: 10px;
+
+.quiz-container {
+  margin-top: 1rem;
 }
-.action-button {
-  background-color: #3490dc;
-  color: white;
-  padding: 10px 20px;
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-}
-.action-button:hover {
-  background-color: #2779bd;
-}
-.timer-text {
-  font-weight: bold;
-  color: red;
-}
+
 .question-block {
   margin-bottom: 20px;
 }
-.error-text {
-  color: red;
-  font-size: 14px;
+
+.question-text {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.option-group label {
+  display: block;
+  margin: 0.4rem 0;
+}
+
+.btn {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background-color: #3490dc;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: #2779bd;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+  color: #fff;
+}
+
+.btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.btn-success {
+  background-color: #38c172;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #2fa360;
+}
+
+.timer-text {
+  font-weight: bold;
+  color: #b91c1c;
+  margin: 0.5rem 0;
 }
 </style>

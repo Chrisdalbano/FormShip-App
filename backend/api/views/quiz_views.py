@@ -1,4 +1,5 @@
 import os
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -93,18 +94,21 @@ def create_quiz(request):
             "questions": question_serializer.data,
             "id": quiz_obj.id,
         }
+        print("Returning quiz creation response:", data_out)
         return Response(data_out, status=status.HTTP_201_CREATED)
 
     except ValueError as e:
-        # e.g. missing fields or parse errors
+        print(f"ValueError in create_quiz: {e}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except QuizCreationError as e:
+        print(f"QuizCreationError in create_quiz: {e}")
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as exc:
-        # Catch all other unexpected errors
+        # Enhanced error logging
         print(f"Unexpected error in create_quiz: {exc}")
         return Response(
-            {"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {"error": f"Unexpected server error: {str(exc)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 

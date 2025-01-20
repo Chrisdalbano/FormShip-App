@@ -13,6 +13,7 @@
             'bg-gray-200 text-gray-800': currentStep !== n,
           }"
           @click="goToStep(n)"
+          :disabled="alreadyCreated"
         >
           Step {{ n }}
         </div>
@@ -26,6 +27,8 @@
         :isLoading="isLoading"
         :aiError="aiError"
         :quizId="quizId"
+        :aiGenerationFailed="aiGenerationFailed"
+        :alreadyCreated="alreadyCreated"
         @update-quiz="onUpdateQuiz"
         @next="goNext"
         @prev="goPrev"
@@ -62,7 +65,7 @@ const authStore = useAuthStore()
 const totalSteps = 4
 const currentStep = ref(1)
 
-// Our main quiz object
+// Quiz object
 const quiz = ref({
   title: '',
   topic: '',
@@ -92,19 +95,17 @@ const quiz = ref({
   require_name: false,
 })
 
-// AI-generated questions from server
+// AI-generated questions
 const questions = ref([])
 
-// Loading + error states
+// States
 const isLoading = ref(false)
 const aiError = ref('')
-
-// NEW:
-// Track if quiz was already created, and store its ID.
+const aiGenerationFailed = ref(false)
 const alreadyCreated = ref(false)
 const quizId = ref(null)
 
-// Decide which step to render
+// Current step
 const currentStepComponent = computed(() => {
   switch (currentStep.value) {
     case 1:
@@ -129,33 +130,31 @@ function goNext() {
     currentStep.value++
   }
 }
+
 function goPrev() {
-  if (currentStep.value > 1) {
+  if (currentStep.value > 1 && !alreadyCreated.value) {
     currentStep.value--
   }
 }
+
 function goToStep(n) {
-  if (n >= 1 && n <= totalSteps) {
+  if (n >= 1 && n <= totalSteps && !alreadyCreated.value) {
     currentStep.value = n
   }
 }
 
-/**
- * Step4 calls this with @finish. We only create once.
- */
 async function finishAndCreate() {
-  // Switch UI to step 4
-  currentStep.value = 4
+  currentStep.value = 4 // Ensure we stay on the last step
   aiError.value = ''
+  aiGenerationFailed.value = false
 
-  // If we already created this quiz, skip re-creation
   if (alreadyCreated.value) {
-    console.log('Quiz was already created. Skipping new POST.')
+    console.log('Quiz already created. Skipping new POST.')
     return
   }
 
   isLoading.value = true
-  questions.value = [] // reset
+  questions.value = [] // Reset questions
   try {
     const payload = {
       title: quiz.value.title.trim(),
@@ -167,7 +166,7 @@ async function finishAndCreate() {
 
       question_count: quiz.value.question_count,
       option_count: quiz.value.option_count,
-      difficulty: 'easy', // or user pick
+      difficulty: 'easy',
       knowledge_base: quiz.value.use_knowledge_base
         ? quiz.value.knowledge_base_text
         : null,
@@ -202,21 +201,24 @@ async function finishAndCreate() {
       account_id: authStore.account?.id,
     }
 
+    console.log('Sending payload to /quizzes/create:', payload)
+
     const url = `${import.meta.env.VITE_API_BASE_URL}/quizzes/create/`
     const { data } = await axios.post(url, payload, {
       headers: { Authorization: `Bearer ${authStore.token}` },
     })
 
+    console.log('Response received from /quizzes/create:', data)
+
     if (!data?.id) {
       throw new Error('No quiz ID returned from server.')
     }
 
-    // Mark the quiz as created, store quizId
     alreadyCreated.value = true
     quizId.value = data.id
 
-    // Slowly appear questions if you like
     if (data.questions && data.questions.length) {
+      console.log('AI-generated questions:', data.questions)
       for (const q of data.questions) {
         if (!q.correct_answer) q.correct_answer = 'A'
         questions.value.push(q)
@@ -224,8 +226,13 @@ async function finishAndCreate() {
       }
     }
   } catch (err) {
-    console.error(err)
-    aiError.value = err.message || 'Failed to create quiz.'
+    console.error(
+      'Error during quiz creation:',
+      err.response || err.message || err,
+    )
+    aiError.value =
+      err.response?.data?.error || err.message || 'Failed to create quiz.'
+    aiGenerationFailed.value = true
   } finally {
     isLoading.value = false
   }

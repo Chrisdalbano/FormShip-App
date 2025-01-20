@@ -4,6 +4,10 @@ from .user import Account
 from ..utils import generate_prefixed_uuid
 
 
+def generate_quiz_id():
+    return generate_prefixed_uuid("q")
+
+
 class Quiz(models.Model):
     EVALUATION_CHOICES = [
         ("pre", "Pre-Evaluated"),
@@ -19,10 +23,11 @@ class Quiz(models.Model):
     ]
 
     id = models.CharField(
-        max_length=36,  #
         primary_key=True,
-        default=generate_prefixed_uuid("q"),
+        max_length=50,
+        default=generate_quiz_id,
         editable=False,
+        unique=True,
     )
 
     account = models.ForeignKey(

@@ -263,6 +263,8 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
+
+
 const quizId = route.params.id
 const loading = ref(true)
 

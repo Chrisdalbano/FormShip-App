@@ -1,8 +1,9 @@
+<!-- eslint-disable no-undef -->
 <template>
   <div
     class="completed-quiz flex flex-col items-center justify-center w-full max-w-lg mx-auto p-4"
   >
-    <!-- If the quiz is set to display results, show the scoreboard -->
+    <!-- Results Section -->
     <div v-if="quiz.display_results" class="results w-full">
       <div
         class="score bg-blue-600 text-white rounded-lg p-6 mb-6 w-full text-center shadow-md"
@@ -46,7 +47,7 @@
       </ol>
     </div>
 
-    <!-- If quiz doesn't display results, show a simple "completed" message -->
+    <!-- Thank You Section -->
     <div v-else class="hidden-results w-full">
       <div
         class="bg-blue-100 text-gray-800 rounded-lg p-6 mb-6 w-full text-center shadow-md"
@@ -65,12 +66,22 @@
     >
       Retake Quiz
     </button>
+
+    <!-- Back to Dashboard -->
+    <button
+      class="bg-blue-600 text-white px-4 py-2 rounded mt-4"
+      @click="goToDashboard"
+    >
+      Back to Dashboard
+    </button>
   </div>
 </template>
 
 <script setup>
-// import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { defineProps } from 'vue'
 
+// Props
 defineProps({
   quiz: {
     type: Object,
@@ -96,8 +107,8 @@ defineProps({
   },
 })
 
-// We'll emit an event if the user wants to retake the quiz
-const emit = defineEmits(['retakeQuiz'])
+// Router
+const router = useRouter()
 
 // Methods
 function isAnswerCorrect(question, userAnswer) {
@@ -122,12 +133,15 @@ function getAnswerContent(question, answerKey) {
   }
 }
 
-// If the quiz is in testing mode, we might allow a retake
 function onRetake() {
-  emit('retakeQuiz')
+  // eslint-disable-next-line no-undef
+  router.push({ name: 'QuizEvent', params: { id: quiz.id } })
+}
+
+function goToDashboard() {
+  router.push({ name: 'QuizDashboard' })
 }
 </script>
-
 <style scoped>
 .completed-quiz {
   margin-top: 1rem;
@@ -146,8 +160,7 @@ function onRetake() {
   padding-left: 1rem;
 }
 
-/* Optional animations if you want them */
-@import 'https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css';
+/* Optional animations */
 @keyframes fadeInDown {
   from {
     opacity: 0;
@@ -158,6 +171,7 @@ function onRetake() {
     transform: none;
   }
 }
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
