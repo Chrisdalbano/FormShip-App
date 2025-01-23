@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models.quiz import Quiz, SharedQuiz
+from ..models.quiz import Quiz, SharedQuiz, QuizSubmission
 from ..models.quiz_invite import InvitedUser
 
 # from ..models.question import Question
@@ -71,3 +71,9 @@ class InvitedUserSerializer(serializers.ModelSerializer):
         model = InvitedUser
         fields = ["id", "quiz", "email", "invited_at", "has_responded"]
         read_only_fields = ["invited_at", "has_responded"]
+
+
+class QuizSubmissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizSubmission
+        fields = "__all__"  # Use all fields or specify if required

@@ -1,12 +1,13 @@
 import uuid
 from django.db import models
-from .quiz import Quiz
 
 
 class Participant(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     quiz = models.ForeignKey(
-        Quiz, on_delete=models.CASCADE, related_name="participants"
+        "api.Quiz",  # Use string reference to avoid circular import
+        on_delete=models.CASCADE,
+        related_name="participants",
     )
     email = models.EmailField(null=True, blank=True)
     name = models.CharField(max_length=255, null=True, blank=True)

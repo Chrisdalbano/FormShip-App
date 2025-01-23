@@ -9,6 +9,8 @@ from ..views.quiz_views import (
     share_quiz,
     move_quiz_to_group,
     update_quiz_order,
+    log_quiz_event,
+    submit_quiz,
 )
 
 urlpatterns = [
@@ -21,4 +23,6 @@ urlpatterns = [
     path("update-order/", update_quiz_order, name="update_quiz_order"),
     path("participants/", include("api.urls.participant_urls")),
     path("<str:quiz_id>/attempts/", get_attempts, name="quiz-attempts"),
+    path("<str:quiz_id>/log/", log_quiz_event, name="log_quiz_event"),
+    path("<str:quiz_id>/submit/", submit_quiz, name="submit_quiz"),
 ]

@@ -1,5 +1,8 @@
 import os
-from django.db import IntegrityError
+
+# from django.db import IntegrityError
+from django.utils.timezone import now
+
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -12,7 +15,8 @@ from openai import OpenAI
 
 from ..models.user import AccountMembership
 
-from ..models.quiz import Quiz, SharedQuiz
+from ..models.participant import Participant
+from ..models.quiz import Quiz, SharedQuiz, QuizEventLog, QuizSubmission
 from ..models.group import Group
 from ..models.question import Question
 from ..serializers.quiz_serializer import QuizSerializer, SharedQuizSerializer
@@ -21,6 +25,7 @@ from ..serializers.question_serializer import QuestionSerializer
 # If you have an InvitedUser model & serializer:
 from ..models.quiz_invite import InvitedUser
 from ..serializers.quiz_serializer import InvitedUserSerializer
+from ..serializers.quiz_serializer import QuizSubmissionSerializer
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -317,3 +322,84 @@ def invite_users_to_quiz(request, quiz_id):
 
     serializer = InvitedUserSerializer(invited, many=True)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def log_quiz_event(request, quiz_id):
+    """
+    Logs quiz-related events like navigation, time spent, and other interactions.
+    """
+    quiz = Quiz.objects.filter(id=quiz_id).first()
+    if not quiz:
+        return Response({"error": "Quiz not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    event_type = request.data.get("type")
+    details = request.data.get("details", {})
+    participant_id = request.data.get("participant_id", None)
+
+    if not event_type:
+        return Response(
+            {"error": "Event type is required."}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        # Create the log entry
+        QuizEventLog.objects.create(
+            quiz=quiz,
+            event_type=event_type,
+            details=details,
+            participant_id=participant_id,
+            timestamp=now(),
+        )
+        return Response(
+            {"message": "Event logged successfully."}, status=status.HTTP_201_CREATED
+        )
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_quiz(request, quiz_id):
+    """
+    Handles quiz submissions and records the results.
+    """
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    participant_id = request.data.get("participant_id")
+    answers = request.data.get("answers", [])
+    score = request.data.get(
+        "score", 0
+    )  # Score can be calculated here or on the frontend
+    duration = request.data.get("duration", None)  # Optional time taken
+
+    if not participant_id or answers is None:
+        return Response(
+            {"error": "Participant ID and answers are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        # Get or create participant
+        participant = Participant.objects.filter(id=participant_id).first()
+        if not participant:
+            return Response(
+                {"error": "Participant not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Save the submission
+        submission = QuizSubmission.objects.create(
+            quiz=quiz,
+            participant=participant,
+            answers=answers,
+            score=score,
+            duration=duration,
+            is_completed=True,
+        )
+
+        # Serialize and return submission
+        serializer = QuizSubmissionSerializer(submission)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -90,6 +90,12 @@
         >
           Publish Quiz
         </button>
+        <button
+          @click="testQuiz"
+          class="ml-4 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-700"
+        >
+          Test Quiz
+        </button>
       </section>
     </div>
   </div>
@@ -109,6 +115,10 @@ const quiz = ref({})
 const invitedUsers = ref([])
 const inviteEmails = ref('')
 const loading = ref(true)
+
+const testQuiz = () => {
+  route.push({ name: 'QuizEvent', params: { id: quizId, test: true } })
+}
 
 const fetchQuiz = async () => {
   try {

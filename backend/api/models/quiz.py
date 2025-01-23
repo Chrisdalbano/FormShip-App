@@ -1,7 +1,11 @@
+import uuid
 from django.db import models
 from .group import Group
 from .user import Account
 from ..utils import generate_prefixed_uuid
+from django.utils.timezone import now
+from .participant import Participant
+from django.utils.timezone import now
 
 
 def generate_quiz_id():
@@ -97,3 +101,37 @@ class SharedQuiz(models.Model):
 
     def __str__(self):
         return f"Shared Quiz: {self.quiz.title}"
+
+
+class QuizEventLog(models.Model):
+    quiz = models.ForeignKey("Quiz", on_delete=models.CASCADE, related_name="events")
+    participant_id = models.CharField(
+        max_length=255, null=True, blank=True
+    )  # Anonymous or logged-in user
+    event_type = models.CharField(max_length=100)  # e.g., 'NEXT_QUESTION', 'SUBMIT'
+    details = models.JSONField(default=dict)  # Flexible structure for event metadata
+    timestamp = models.DateTimeField(default=now)
+
+    def __str__(self):
+        return f"{self.event_type} - {self.quiz.title} at {self.timestamp}"
+
+
+class QuizSubmission(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="submissions")
+    participant = models.ForeignKey(
+        "api.Participant",  # Use string reference to avoid import
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="submissions",
+    )
+    answers = models.JSONField(default=dict)  # Stores submitted answers
+    score = models.FloatField(null=True, blank=True)  # Final calculated score
+    submitted_at = models.DateTimeField(default=now)
+    is_completed = models.BooleanField(default=True)  # Flag for completion
+    duration = models.IntegerField(null=True, blank=True)  # Time taken in seconds
+
+    def __str__(self):
+        participant_name = self.participant.name if self.participant else "Anonymous"
+        return f"Submission for {self.quiz.title} by {participant_name}"
