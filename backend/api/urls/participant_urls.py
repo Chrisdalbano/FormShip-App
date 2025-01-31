@@ -5,7 +5,15 @@ from ..views.participant_views import (
     create_or_validate_participant,
 )
 
+from ..views.participant_views import CreateParticipantView
+
+
 urlpatterns = [
+    path(
+        "quiz/<str:quiz_id>/",
+        create_or_validate_participant,
+        name="create_or_validate_participant",
+    ),
     path("<str:participant_id>/", participant_detail, name="participant_detail"),
     path(
         "<str:participant_id>/update-score/",
@@ -14,7 +22,7 @@ urlpatterns = [
     ),
     path(
         "quiz/<str:quiz_id>/",
-        create_or_validate_participant,
-        name="create_or_validate_participant",
+        CreateParticipantView.as_view(),
+        name="create_participant",
     ),
 ]

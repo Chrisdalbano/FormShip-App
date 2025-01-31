@@ -8,17 +8,13 @@ from .question_serializer import QuestionSerializer
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
-
-    evaluation_type = serializers.CharField()
-    is_testing = serializers.BooleanField()
-    is_published = serializers.BooleanField()
-    access_control = serializers.CharField()
+    shareable_url = serializers.SerializerMethodField()  # Add this field
 
     class Meta:
         model = Quiz
         fields = [
             "id",
-            "account",  # Add account field
+            "account",
             "group",
             "order",
             "title",
@@ -44,9 +40,16 @@ class QuizSerializer(serializers.ModelSerializer):
             "is_testing",
             "is_published",
             "access_control",
-            # nested
             "questions",
+            "shareable_url",  # Include in the serializer
         ]
+
+    def get_shareable_url(self, obj):
+        """Generate a shareable URL for the quiz."""
+        request = self.context.get("request")
+        if obj.is_published and request:
+            return request.build_absolute_uri(f"/quiz/{obj.id}/")
+        return None
 
     def validate(self, data):
         if data.get("require_password") and not data.get("password"):

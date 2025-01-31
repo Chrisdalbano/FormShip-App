@@ -1,119 +1,138 @@
 <template>
   <div class="quiz-access-container">
-    <div v-if="loading" class="text-center">Loading quiz info...</div>
-    <div v-else-if="errorMessage" class="text-center text-red-500">
-      {{ errorMessage }}
-    </div>
-    <div v-else-if="quiz">
+    <h2 v-if="quiz.isCreator" class="text-xl font-bold">
+      Test Mode Available for Quiz: {{ quiz.title }}
+    </h2>
+    <div v-if="loading">Loading quiz...</div>
+    <div v-else-if="errorMessage" class="text-red-500">{{ errorMessage }}</div>
+    <div v-else>
       <div v-if="quiz.access_control === 'login_required' && !isUserLoggedIn">
-        <p>You must be logged in to access this quiz.</p>
+        <p class="text-yellow-600">
+          You must be logged in to access this quiz.
+        </p>
       </div>
-
-      <div v-if="quiz.access_control === 'invitation'">
-        <label class="block mt-2">Enter your invitation email:</label>
-        <input
-          type="email"
-          v-model="invitationEmail"
-          placeholder="john@example.com"
-          class="border p-2 rounded"
-        />
-      </div>
-
       <div v-if="quiz.require_password">
-        <label class="block mt-2">Quiz Password:</label>
-        <input
-          type="password"
-          v-model="quizPassword"
-          placeholder="Enter quiz password"
-          class="border p-2 rounded"
-        />
+        <label>Quiz Password:</label>
+        <input v-model="quizPassword" type="password" placeholder="Password" />
       </div>
-
       <div v-if="quiz.require_name || !quiz.allow_anonymous">
-        <label class="block mt-2">Your Name/Nickname:</label>
-        <input
-          type="text"
-          v-model="participantName"
-          placeholder="Your name"
-          class="border p-2 rounded"
-        />
+        <label>Your Name:</label>
+        <input v-model="participantName" type="text" placeholder="Name" />
       </div>
-
+      <button @click="validateAccess" class="btn btn-primary">Access Quiz</button>
       <button
-        class="bg-blue-500 text-white px-4 py-2 rounded mt-4"
-        @click="onSubmitAccess"
+        v-if="quiz.isCreator"
+        @click="launchTestMode"
+        class="btn btn-secondary"
       >
-        Continue to Quiz
+        Test Quiz
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { useAuthStore } from '@/store/auth'
 
-const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
-
 const quizId = route.params.id
 const quiz = ref(null)
-const loading = ref(true)
 const errorMessage = ref('')
-const invitationEmail = ref('')
-const quizPassword = ref('')
 const participantName = ref('')
-
-const isUserLoggedIn = computed(() => !!authStore.token)
+const quizPassword = ref('')
+const loading = ref(true)
+const isUserLoggedIn = ref(false) // Assume a method to check login status
 
 onMounted(async () => {
   try {
-    const res = await axios.get(`/api/quizzes/${quizId}/`)
-    quiz.value = res.data
-  } catch (err) {
-    console.error('Error fetching quiz:', err)
-    errorMessage.value =
-      'Could not load quiz. It may be invalid or unpublished.'
+    const response = await axios.get(`/api/quizzes/${quizId}/`)
+    quiz.value = response.data
+    
+    // Check if quiz requires login and user is not logged in
+    if (quiz.value.access_control === 'login_required' && !checkUserLoginStatus()) {
+      router.push({ 
+        name: 'Login', 
+        query: { 
+          redirect: `/quiz/${quizId}`,
+          message: 'Please login to access this quiz'
+        }
+      })
+      return
+    }
+    
+    isUserLoggedIn.value = checkUserLoginStatus()
+  } catch (error) {
+    if (error.response?.status === 401) {
+      router.push({ 
+        name: 'Login', 
+        query: { 
+          redirect: `/quiz/${quizId}`,
+          message: 'Please login to access this quiz'
+        }
+      })
+      return
+    }
+    console.error('Failed to load quiz:', error)
+    errorMessage.value = 'Failed to load quiz.'
   } finally {
     loading.value = false
   }
 })
 
-async function onSubmitAccess() {
-  if (!quiz.value) return
-
+const validateAccess = async () => {
   try {
-    const payload = {
-      email: invitationEmail.value || null,
-      password: quizPassword.value || null,
-      name: participantName.value || null,
+    if (quiz.value.access_control === 'login_required' && !isUserLoggedIn.value) {
+      router.push({ 
+        name: 'Login',
+        query: { 
+          redirect: `/quiz/${quizId}`,
+          message: 'Please login to access this quiz'
+        }
+      })
+      return
     }
 
-    const participantRes = await axios.post(
+    const payload = {
+      name: participantName.value || 'Guest',
+      password: quizPassword.value || null,
+    }
+    const response = await axios.post(
       `/api/participants/quiz/${quizId}/`,
       payload,
     )
 
-    const participantData = participantRes.data
-    localStorage.setItem(`quiz_${quizId}_participant_id`, participantData.id)
-    router.push({ name: 'QuizEvent', params: { id: quizId } })
-  } catch (err) {
-    console.error('Error creating participant:', err)
-    errorMessage.value =
-      err.response?.data?.error || 'Failed to validate participant.'
+    if (response.data.id) {
+      localStorage.setItem(`participant_${quizId}`, response.data.id)
+      router.push({ name: 'QuizEvent', params: { id: quizId } })
+    } else {
+      console.error('Participant ID is missing in response.')
+      errorMessage.value = 'Failed to validate participant.'
+    }
+  } catch (error) {
+    if (error.response?.status === 401) {
+      router.push({ 
+        name: 'Login',
+        query: { 
+          redirect: `/quiz/${quizId}`,
+          message: 'Please login to access this quiz'
+        }
+      })
+      return
+    }
+    console.error('Failed to validate participant:', error)
+    errorMessage.value = 'Failed to validate participant.'
   }
 }
-</script>
 
-<style scoped>
-.quiz-access-container {
-  max-width: 600px;
-  margin: 2rem auto;
-  padding: 1rem;
-  background-color: #fff;
-  border-radius: 8px;
+const launchTestMode = () => {
+  window.open(`/quiz/${quizId}?test=true`, '_blank')
 }
-</style>
+
+function checkUserLoginStatus() {
+  // Implement actual login check, for example:
+  return localStorage.getItem('token') !== null
+}
+</script>

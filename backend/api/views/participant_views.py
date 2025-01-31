@@ -6,6 +6,7 @@ from ..models.quiz import Quiz
 from ..serializers.participant_serializer import ParticipantSerializer
 from rest_framework import status
 from ..models.quiz_invite import InvitedUser
+from rest_framework.views import APIView
 
 
 @api_view(["GET"])
@@ -26,103 +27,93 @@ def update_participant_score(request, participant_id):
     participant.save()
     return Response({"message": "Score updated successfully."})
 
+
 @api_view(["POST"])
 def create_or_validate_participant(request, quiz_id):
     """
     Handles participant creation or validation for a given quiz.
-    Expects data like:
-      {
-        "email": "...",
-        "name": "...",
-        "password": "...",
-        "invitation_token": "...",  (optional)
-      }
-    We'll validate the quiz's access_control rules, password, etc.
-    Returns a participant record or an error.
+    Differentiates between internal (account members) and external participants.
     """
-
     quiz_obj = get_object_or_404(Quiz, id=quiz_id)
 
-    # 1) Check if quiz is published or in testing mode – you can decide
     if not quiz_obj.is_published and not quiz_obj.is_testing:
         return Response(
-            {"error": "Quiz is not accessible (unpublished)."},
+            {"error": "Quiz is not accessible (unpublished or not in testing mode)."},
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    # 2) Access control checks
-    access_mode = quiz_obj.access_control  # public, invitation, login_required
+    access_mode = quiz_obj.access_control
     user = request.user if request.user.is_authenticated else None
 
-    # 2a) If login_required, the participant must be an authenticated user
-    if access_mode == "login_required":
-        if not user:
+    if access_mode == "login_required" and not user:
+        return Response(
+            {"error": "Login required to access this quiz."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    email = request.data.get("email")
+    if access_mode == "invitation" and not email:
+        return Response(
+            {"error": "Email is required for invitation-based quizzes."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if (
+        access_mode == "invitation"
+        and not InvitedUser.objects.filter(quiz=quiz_obj, email=email).exists()
+    ):
+        return Response(
+            {"error": "This email is not invited to take this quiz."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    provided_password = request.data.get("password")
+    if quiz_obj.require_password and provided_password != quiz_obj.password:
+        return Response(
+            {"error": "Invalid quiz password."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    name = request.data.get("name", "Anonymous")
+    participant, created = Participant.objects.get_or_create(
+        quiz=quiz_obj,
+        email=email if email else None,
+        defaults={"name": name, "is_authenticated_user": bool(user)},
+    )
+    if not created:
+        participant.name = name or participant.name
+        participant.save()
+
+    return Response(
+        {"id": participant.id, "message": "Participant successfully validated."},
+        status=status.HTTP_200_OK,
+    )
+
+
+class CreateParticipantView(APIView):
+    def post(self, request, quiz_id):
+        """Creates a participant for a given quiz."""
+        quiz = get_object_or_404(Quiz, id=quiz_id)
+
+        # Validate access control
+        if (
+            quiz.access_control == "login_required"
+            and not request.user.is_authenticated
+        ):
             return Response(
                 {"error": "You must be logged in to access this quiz."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-    # 2b) If invitation-only, the user must have a valid invite or matching email
-    if access_mode == "invitation":
-        email = request.data.get("email")
-        if not email:
-            return Response(
-                {"error": "Email is required for invitation-based quizzes."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        participant_data = {
+            "quiz": quiz.id,
+            "name": request.data.get("name", None),
+            "email": request.data.get("email", None),
+            "is_authenticated_user": request.user.is_authenticated,
+        }
 
-        invited_exists = InvitedUser.objects.filter(quiz=quiz_obj, email=email).exists()
-        if not invited_exists:
-            return Response(
-                {"error": "This email is not invited to take this quiz."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-    # 3) If the quiz requires a password, validate it
-    if quiz_obj.require_password:
-        provided_password = request.data.get("password")
-        if provided_password != quiz_obj.password:
-            return Response(
-                {"error": "Invalid quiz password."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-    # 4) If the quiz does NOT allow anonymous, we need some form of name or an authenticated user
-    allow_anonymous = quiz_obj.allow_anonymous
-    require_name = quiz_obj.require_name
-    name = request.data.get("name")
-    if not allow_anonymous:
-        # Must have at least a name or an authenticated user
-        if not user and (not name or name.strip() == ""):
-            return Response(
-                {"error": "Name or authenticated user required (quiz not allowing anonymous)."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    if require_name and (not name or name.strip() == ""):
-        return Response(
-            {"error": "A name/nickname is required for this quiz."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # 5) Create or retrieve participant
-    participant_data = {
-        "quiz": quiz_obj.id,
-        "name": name if name else None,
-        "is_authenticated_user": bool(user),
-    }
-
-    # Optionally store the email if invitation or user is logged in
-    if access_mode == "invitation":
-        participant_data["email"] = request.data.get("email")
-
-    if user and not participant_data.get("email"):
-        # If the user is logged in, we can store their user’s email or external ID
-        participant_data["email"] = user.email
-
-    serializer = ParticipantSerializer(data=participant_data)
-    if serializer.is_valid():
-        participant_obj = serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    else:
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = ParticipantSerializer(data=participant_data)
+        if serializer.is_valid():
+            participant = serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

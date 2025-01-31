@@ -28,6 +28,7 @@
       <button @click="duplicateQuiz" class="option-item">Duplicate</button>
       <button @click="deleteQuiz" class="option-item">Delete</button>
     </div>
+    
   </div>
 </template>
 
@@ -52,8 +53,14 @@ const emit = defineEmits([
 ])
 
 const handleDragStart = () => emit('drag-start', props.quiz)
-const navigateToQuiz = () =>
-  router.push({ name: 'QuizEvent', params: { id: props.quiz.id } })
+const navigateToQuiz = () => {
+  if (props.quiz.is_published || props.quiz.is_testing) {
+    router.push({ name: 'QuizEvent', params: { id: props.quiz.id } })
+  } else {
+    alert('This quiz is not published or available for testing.')
+  }
+}
+
 const goToManagement = () =>
   router.push({ name: 'QuizManagement', params: { id: props.quiz.id } })
 const toggleMoreOptions = () => emit('toggle-options', props.quiz.id)

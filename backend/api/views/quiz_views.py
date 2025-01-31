@@ -1,4 +1,6 @@
 import os
+from django.conf import settings
+from django.http import JsonResponse
 
 # from django.db import IntegrityError
 from django.utils.timezone import now
@@ -8,6 +10,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import viewsets
+
 from ..services.quiz_creation_service import QuizCreationService, QuizCreationError
 
 # If you rely on OpenAI for quiz generation:
@@ -238,15 +242,10 @@ def duplicate_quiz(request, quiz_id):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-@api_view(["POST"])
 def share_quiz(request, quiz_id):
-    """
-    Example for generating a 'shared quiz' link. Possibly used for external sharing.
-    """
-    quiz_obj = get_object_or_404(Quiz, id=quiz_id)
-    shared_quiz = SharedQuiz.objects.create(quiz=quiz_obj)
-    serializer = SharedQuizSerializer(shared_quiz)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+    base_url = settings.BASE_URL  # Define BASE_URL in your settings
+    shareable_link = f"{base_url}/quiz/{quiz_id}/"
+    return JsonResponse({"shareable_link": shareable_link})
 
 
 @api_view(["PUT"])
@@ -360,18 +359,17 @@ def log_quiz_event(request, quiz_id):
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([])
 def submit_quiz(request, quiz_id):
     """
     Handles quiz submissions and records the results.
+    Skips recording submissions for internal participants.
     """
     quiz = get_object_or_404(Quiz, id=quiz_id)
     participant_id = request.data.get("participant_id")
     answers = request.data.get("answers", [])
-    score = request.data.get(
-        "score", 0
-    )  # Score can be calculated here or on the frontend
-    duration = request.data.get("duration", None)  # Optional time taken
+    score = request.data.get("score", 0)
+    duration = request.data.get("duration", None)
 
     if not participant_id or answers is None:
         return Response(
@@ -379,15 +377,25 @@ def submit_quiz(request, quiz_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    try:
-        # Get or create participant
-        participant = Participant.objects.filter(id=participant_id).first()
-        if not participant:
-            return Response(
-                {"error": "Participant not found."}, status=status.HTTP_404_NOT_FOUND
-            )
+    # Get participant
+    participant = Participant.objects.filter(id=participant_id).first()
+    if not participant:
+        return Response(
+            {"error": "Participant not found."}, status=status.HTTP_404_NOT_FOUND
+        )
 
-        # Save the submission
+    # Skip submission for internal participants
+    if (
+        participant.is_authenticated_user
+        and quiz.account.members.filter(id=request.user.id).exists()
+    ):
+        return Response(
+            {"message": "Internal participant submission skipped."},
+            status=status.HTTP_200_OK,
+        )
+
+    try:
+        # Save the submission for external participants
         submission = QuizSubmission.objects.create(
             quiz=quiz,
             participant=participant,
@@ -396,10 +404,37 @@ def submit_quiz(request, quiz_id):
             duration=duration,
             is_completed=True,
         )
-
-        # Serialize and return submission
         serializer = QuizSubmissionSerializer(submission)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["PATCH"])
+def update_quiz_status(request, quiz_id):
+    """
+    Update specific fields of a quiz (e.g., is_published, is_testing).
+    """
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+
+    # Only allow updates to specific fields
+    allowed_fields = ["is_published", "is_testing", "access_control"]
+    for field in allowed_fields:
+        if field in request.data:
+            setattr(quiz, field, request.data[field])
+
+    quiz.save()
+
+    # Return the updated quiz data
+    serializer = QuizSerializer(quiz)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class QuizViewSet(viewsets.ModelViewSet):
+    """
+    Provides CRUD operations for quizzes.
+    """
+
+    queryset = Quiz.objects.all()
+    serializer_class = QuizSerializer

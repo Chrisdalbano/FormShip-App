@@ -11,6 +11,7 @@ from ..views.quiz_views import (
     update_quiz_order,
     log_quiz_event,
     submit_quiz,
+    update_quiz_status,
 )
 
 urlpatterns = [
@@ -25,4 +26,5 @@ urlpatterns = [
     path("<str:quiz_id>/attempts/", get_attempts, name="quiz-attempts"),
     path("<str:quiz_id>/log/", log_quiz_event, name="log_quiz_event"),
     path("<str:quiz_id>/submit/", submit_quiz, name="submit_quiz"),
+    path("<str:quiz_id>/update-status/", update_quiz_status, name="update_quiz_status"),
 ]

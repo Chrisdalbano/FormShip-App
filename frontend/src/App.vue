@@ -1,15 +1,15 @@
 <template>
   <div id="app">
-    <NavbarComponent v-if="!isQuizStandalone" />
+    <NavbarComponent v-if="showNavbar" />
     <main>
       <router-view />
     </main>
-    <FooterComponent v-if="!isQuizStandalone" />
+    <FooterComponent v-if="showFooter" />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, computed } from 'vue'
 import { useAuthStore } from './store/auth'
 import NavbarComponent from './components/NavbarComponent.vue'
 import FooterComponent from './components/FooterComponent.vue'
@@ -17,7 +17,9 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const isQuizStandalone = route.name === 'QuizEvent'
+
+const showNavbar = computed(() => route.name !== 'QuizEvent')
+const showFooter = computed(() => route.name !== 'QuizEvent')
 
 onMounted(() => {
   authStore.initializeAuth() // Restore authentication state on app load

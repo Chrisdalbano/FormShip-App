@@ -6,6 +6,7 @@ from ..utils import generate_prefixed_uuid
 from django.utils.timezone import now
 from .participant import Participant
 from django.utils.timezone import now
+from django.urls import reverse
 
 
 def generate_quiz_id():
@@ -13,6 +14,20 @@ def generate_quiz_id():
 
 
 class Quiz(models.Model):
+
+    def get_shareable_url(self):
+        from django.contrib.sites.models import Site
+        current_site = Site.objects.get_current()
+        base_url = f"https://{current_site.domain}"
+        
+        # Different URL formats based on access control
+        if self.access_control == 'login_required':
+            return f"{base_url}/quiz/access/{self.id}"
+        elif self.access_control == 'invitation':
+            return f"{base_url}/quiz/invite/{self.id}"
+        else:  # public
+            return f"{base_url}/quiz/{self.id}"
+
     EVALUATION_CHOICES = [
         ("pre", "Pre-Evaluated"),
         ("hybrid", "Hybrid"),

@@ -54,7 +54,7 @@ const routes = [
     meta: { requiresAuth: true },
     beforeEnter: beforeEnterRoutesHandler,
   },
-  
+
   {
     path: '/create-quiz',
     name: 'CreateQuiz',
@@ -74,9 +74,9 @@ const routes = [
     path: '/quiz/:id',
     name: 'QuizEvent',
     component: QuizEventComponent,
-    props: true,
-    meta: { requiresAuth: false }, // Allows public access for live quizzes
-  },
+    meta: { layout: 'blank' },
+  }
+  ,
   {
     path: '/quiz-results/:id',
     name: 'CompletedQuiz',
@@ -124,10 +124,33 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore()
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next({ name: 'Auth' })
+router.beforeEach(async (to, from, next) => {
+  if (to.path.startsWith('/quiz/')) {
+    try {
+      const quizId = to.params.id
+      const response = await axios.get(`/api/quizzes/${quizId}/`)
+      
+      if (response.data.access_control === 'login_required') {
+        const authStore = useAuthStore()
+        if (!authStore.isAuthenticated) {
+          next({
+            name: 'Login',
+            query: { redirect: to.fullPath }
+          })
+          return
+        }
+      }
+      next()
+    } catch (error) {
+      if (error.response?.status === 401) {
+        next({
+          name: 'Login',
+          query: { redirect: to.fullPath }
+        })
+      } else {
+        next('/error')
+      }
+    }
   } else {
     next()
   }
