@@ -3,6 +3,9 @@ from .quiz import Quiz, SharedQuiz
 from .question import Question
 from .user import UserQuizHistory, UserResult
 from .attempt import Attempt
+from .participant import Participant
+from .quiz_invite import InvitedUser
+from .user import User
 
 __all__ = [
     "Group",
@@ -11,5 +14,8 @@ __all__ = [
     "Question",
     "UserQuizHistory",
     "UserResult",
-    "Attempt"
+    "Attempt",
+    "Participant",
+    "InvitedUser",
+    "User"
 ]

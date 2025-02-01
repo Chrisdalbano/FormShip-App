@@ -113,13 +113,13 @@ def invite_user(request, account_id):
 
     # Send invitation email with instructions to set a password
     send_mail(
-        subject="You're invited to join Inteqra",
+        subject="You're invited to join formship",
         message=(
             f"Hello,\n\nYou've been invited to join the account '{account.name}'. "
             "Please set your password to activate your account.\n\n"
             "Visit: <password_reset_link>"
         ),
-        from_email="no-reply@inteqra.com",
+        from_email="no-reply@formship.com",
         recipient_list=[email],
         fail_silently=False,
     )
@@ -268,7 +268,7 @@ def create_user(request, account_id):
         send_mail(
             "Account Invitation",
             f"You've been added to the account {account.name}.",
-            "no-reply@inteqra.com",
+            "no-reply@formship.com",
             [email],
             fail_silently=False,
         )

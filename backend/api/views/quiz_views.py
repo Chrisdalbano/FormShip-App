@@ -6,8 +6,8 @@ from django.http import JsonResponse
 from django.utils.timezone import now
 
 from django.shortcuts import get_object_or_404
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import viewsets
@@ -30,6 +30,8 @@ from ..serializers.question_serializer import QuestionSerializer
 from ..models.quiz_invite import InvitedUser
 from ..serializers.quiz_serializer import InvitedUserSerializer
 from ..serializers.quiz_serializer import QuizSubmissionSerializer
+
+from ..authentication import ParticipantJWTAuthentication
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -122,6 +124,8 @@ def create_quiz(request):
 
 
 @api_view(["GET", "PUT", "DELETE"])
+@permission_classes([AllowAny])
+@authentication_classes([ParticipantJWTAuthentication])
 def quiz_detail(request, quiz_id):
     """
     Retrieve, update, or delete a quiz.
@@ -141,6 +145,7 @@ def quiz_detail(request, quiz_id):
             return Response({"error": "Permission denied."}, status=403)
 
     if request.method == "GET":
+        # Allow participants to view the quiz
         serializer = QuizSerializer(quiz_obj)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -175,7 +180,6 @@ def quiz_detail(request, quiz_id):
                     if new_q_serializer.is_valid():
                         new_q_obj = new_q_serializer.save()
                         updated_questions.append(QuestionSerializer(new_q_obj).data)
-            # If desired, remove questions not in the new data here
 
         # Return the updated quiz
         updated_quiz_serializer = QuizSerializer(quiz_obj)
@@ -358,13 +362,15 @@ def log_quiz_event(request, quiz_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(["POST"])
-@permission_classes([])
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([ParticipantJWTAuthentication])
 def submit_quiz(request, quiz_id):
-    """
-    Handles quiz submissions and records the results.
-    Skips recording submissions for internal participants.
-    """
+    """Handles quiz submissions and records the results."""
+    print("[Submit Quiz] Request received:", request.data)
+    print("[Submit Quiz] Auth:", request.auth)
+    print("[Submit Quiz] User:", request.user)
+    
     quiz = get_object_or_404(Quiz, id=quiz_id)
     participant_id = request.data.get("participant_id")
     answers = request.data.get("answers", [])
@@ -381,21 +387,12 @@ def submit_quiz(request, quiz_id):
     participant = Participant.objects.filter(id=participant_id).first()
     if not participant:
         return Response(
-            {"error": "Participant not found."}, status=status.HTTP_404_NOT_FOUND
-        )
-
-    # Skip submission for internal participants
-    if (
-        participant.is_authenticated_user
-        and quiz.account.members.filter(id=request.user.id).exists()
-    ):
-        return Response(
-            {"message": "Internal participant submission skipped."},
-            status=status.HTTP_200_OK,
+            {"error": "Participant not found.", "code": "participant_not_found"},
+            status=status.HTTP_404_NOT_FOUND
         )
 
     try:
-        # Save the submission for external participants
+        # Save the submission
         submission = QuizSubmission.objects.create(
             quiz=quiz,
             participant=participant,
@@ -408,7 +405,11 @@ def submit_quiz(request, quiz_id):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        print("[Submit Quiz] Error:", str(e))
+        return Response(
+            {"error": str(e)}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(["PATCH"])
@@ -438,3 +439,36 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     queryset = Quiz.objects.all()
     serializer_class = QuizSerializer
+
+
+@api_view(['POST'])
+def validate_invitation(request, quiz_id):
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    email = request.data.get('email')
+    
+    # Check if email is in invited users
+    is_invited = InvitedUser.objects.filter(
+        quiz=quiz,
+        email=email,
+        is_active=True
+    ).exists()
+    
+    return Response({'valid': is_invited})
+
+
+@api_view(['POST'])
+def add_invitations(request, quiz_id):
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    emails = request.data.get('emails', [])
+    
+    created_invites = []
+    for email in emails:
+        invite, created = InvitedUser.objects.get_or_create(
+            quiz=quiz,
+            email=email
+        )
+        if created:
+            created_invites.append(invite)
+    
+    serializer = InvitedUserSerializer(created_invites, many=True)
+    return Response(serializer.data)

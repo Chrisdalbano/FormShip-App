@@ -1,29 +1,16 @@
 <template>
-  <div id="app">
-    <NavbarComponent v-if="showNavbar" />
-    <main>
-      <router-view />
+  <div class="app min-h-screen flex flex-col">
+    <DynamicNavbar />
+    <main class="flex-grow">
+      <router-view></router-view>
     </main>
-    <FooterComponent v-if="showFooter" />
+    <FooterComponent />
   </div>
 </template>
 
 <script setup>
-import { onMounted, computed } from 'vue'
-import { useAuthStore } from './store/auth'
-import NavbarComponent from './components/NavbarComponent.vue'
+import DynamicNavbar from './components/DynamicNavbar.vue'
 import FooterComponent from './components/FooterComponent.vue'
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
-const authStore = useAuthStore()
-
-const showNavbar = computed(() => route.name !== 'QuizEvent')
-const showFooter = computed(() => route.name !== 'QuizEvent')
-
-onMounted(() => {
-  authStore.initializeAuth() // Restore authentication state on app load
-})
 </script>
 
 <style scoped>

@@ -1,40 +1,66 @@
 <template>
-  <div class="quiz-access-container">
-    <h2 v-if="quiz.isCreator" class="text-xl font-bold">
-      Test Mode Available for Quiz: {{ quiz.title }}
-    </h2>
-    <div v-if="loading">Loading quiz...</div>
+  <div class="quiz-access-container p-6 max-w-lg mx-auto">
+    <h2 class="text-xl font-bold mb-4">{{ quiz?.title }}</h2>
+
+    <div v-if="loading" class="text-center">Loading quiz access...</div>
+
     <div v-else-if="errorMessage" class="text-red-500">{{ errorMessage }}</div>
+
     <div v-else>
-      <div v-if="quiz.access_control === 'login_required' && !isUserLoggedIn">
-        <p class="text-yellow-600">
-          You must be logged in to access this quiz.
-        </p>
+      <!-- Use ParticipantAuth for authentication -->
+      <ParticipantAuth
+        v-if="showParticipantAuth"
+        :quiz="quiz"
+        @auth-success="handleAuthSuccess"
+      />
+
+      <!-- Invitation Validation -->
+      <div v-else-if="showInvitationPrompt" class="mb-6">
+        <p class="text-blue-600 mb-4">This quiz requires an invitation.</p>
+        <div class="email-validation">
+          <input
+            v-model="email"
+            type="email"
+            placeholder="Enter your email"
+            class="input-field mb-2"
+          />
+          <button @click="validateInvitation" class="btn btn-primary">
+            Validate Invitation
+          </button>
+        </div>
       </div>
-      <div v-if="quiz.require_password">
-        <label>Quiz Password:</label>
-        <input v-model="quizPassword" type="password" placeholder="Password" />
+
+      <!-- Public Access -->
+      <div v-else>
+        <div v-if="quiz?.require_name" class="mb-4">
+          <label class="block mb-2">Your Name</label>
+          <input
+            v-model="participantName"
+            type="text"
+            class="input-field"
+            placeholder="Enter your name"
+          />
+        </div>
+
+        <button
+          @click="proceedToQuiz"
+          class="btn btn-primary w-full"
+          :disabled="!canProceed"
+        >
+          Start Quiz
+        </button>
       </div>
-      <div v-if="quiz.require_name || !quiz.allow_anonymous">
-        <label>Your Name:</label>
-        <input v-model="participantName" type="text" placeholder="Name" />
-      </div>
-      <button @click="validateAccess" class="btn btn-primary">Access Quiz</button>
-      <button
-        v-if="quiz.isCreator"
-        @click="launchTestMode"
-        class="btn btn-secondary"
-      >
-        Test Quiz
-      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
+// import { useAuthStore } from '../store/auth'
+import ParticipantAuth from '../components/ParticipantAuth.vue'
+import { useParticipantStore } from '@/store/participant'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,39 +68,53 @@ const quizId = route.params.id
 const quiz = ref(null)
 const errorMessage = ref('')
 const participantName = ref('')
-const quizPassword = ref('')
+const email = ref('')
 const loading = ref(true)
-const isUserLoggedIn = ref(false) // Assume a method to check login status
+const isEmailValidated = ref(false)
+const showParticipantAuth = ref(false)
+const showInvitationPrompt = ref(false)
+
 
 onMounted(async () => {
   try {
+    const participantStore = useParticipantStore()
+    
+    // First check if participant is already authenticated
+    if (participantStore.isAuthenticated) {
+      console.log('[QuizAccess] Participant already authenticated')
+      
+      // Get quiz details first
+      const response = await axios.get(`/api/quizzes/${quizId}/`)
+      quiz.value = response.data
+      
+      // Set current quiz in store
+      participantStore.setCurrentQuiz(quiz.value)
+      
+      // Directly proceed to quiz
+      router.push({
+        name: 'QuizEvent',
+        params: { id: quizId }
+      })
+      return
+    }
+
+    // If not authenticated, get quiz details and show appropriate access form
     const response = await axios.get(`/api/quizzes/${quizId}/`)
     quiz.value = response.data
     
-    // Check if quiz requires login and user is not logged in
-    if (quiz.value.access_control === 'login_required' && !checkUserLoginStatus()) {
-      router.push({ 
-        name: 'Login', 
-        query: { 
-          redirect: `/quiz/${quizId}`,
-          message: 'Please login to access this quiz'
-        }
-      })
-      return
+    // Handle participant access for non-authenticated users
+    switch (quiz.value.access_control) {
+      case 'login_required':
+        showParticipantAuth.value = true
+        break
+      case 'invitation':
+        showInvitationPrompt.value = true
+        break
+      case 'public':
+        // Allow direct access
+        break
     }
-    
-    isUserLoggedIn.value = checkUserLoginStatus()
   } catch (error) {
-    if (error.response?.status === 401) {
-      router.push({ 
-        name: 'Login', 
-        query: { 
-          redirect: `/quiz/${quizId}`,
-          message: 'Please login to access this quiz'
-        }
-      })
-      return
-    }
     console.error('Failed to load quiz:', error)
     errorMessage.value = 'Failed to load quiz.'
   } finally {
@@ -82,57 +122,60 @@ onMounted(async () => {
   }
 })
 
-const validateAccess = async () => {
+const canProceed = computed(() => {
+  if (quiz.value?.access_control === 'invitation' && !isEmailValidated.value) {
+    return false
+  }
+  if (quiz.value?.require_name && !participantName.value) {
+    return false
+  }
+  return true
+})
+
+const validateInvitation = async () => {
   try {
-    if (quiz.value.access_control === 'login_required' && !isUserLoggedIn.value) {
-      router.push({ 
-        name: 'Login',
-        query: { 
-          redirect: `/quiz/${quizId}`,
-          message: 'Please login to access this quiz'
-        }
-      })
-      return
-    }
-
-    const payload = {
-      name: participantName.value || 'Guest',
-      password: quizPassword.value || null,
-    }
     const response = await axios.post(
-      `/api/participants/quiz/${quizId}/`,
-      payload,
+      `/api/quizzes/${quizId}/validate-invitation/`,
+      {
+        email: email.value,
+      },
     )
-
-    if (response.data.id) {
-      localStorage.setItem(`participant_${quizId}`, response.data.id)
-      router.push({ name: 'QuizEvent', params: { id: quizId } })
+    if (response.data.valid) {
+      isEmailValidated.value = true
     } else {
-      console.error('Participant ID is missing in response.')
-      errorMessage.value = 'Failed to validate participant.'
+      errorMessage.value = 'Email not found in invitation list'
     }
+  // eslint-disable-next-line no-unused-vars
   } catch (error) {
-    if (error.response?.status === 401) {
-      router.push({ 
-        name: 'Login',
-        query: { 
-          redirect: `/quiz/${quizId}`,
-          message: 'Please login to access this quiz'
-        }
-      })
-      return
-    }
-    console.error('Failed to validate participant:', error)
-    errorMessage.value = 'Failed to validate participant.'
+    errorMessage.value = 'Failed to validate invitation'
   }
 }
 
-const launchTestMode = () => {
-  window.open(`/quiz/${quizId}?test=true`, '_blank')
-}
-
-function checkUserLoginStatus() {
-  // Implement actual login check, for example:
-  return localStorage.getItem('token') !== null
+const handleAuthSuccess = async (participantData) => {
+  const participantStore = useParticipantStore()
+  
+  // Set the participant data in the store
+  await participantStore.setParticipantData({
+    ...participantData,
+    currentQuiz: quiz.value
+  })
+  
+  // Navigate to quiz
+  router.push({
+    name: 'QuizEvent',
+    params: { id: quizId },
+  })
 }
 </script>
+
+<style scoped>
+.btn {
+  @apply px-4 py-2 rounded-lg font-medium transition-colors;
+}
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+.input-field {
+  @apply w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500;
+}
+</style>

@@ -95,6 +95,15 @@ class Quiz(models.Model):
         default="public",
         help_text="Determines who can access the quiz.",
     )
+    allow_review = models.BooleanField(
+        default=True,
+        help_text="Allow participants to review their answers after completion"
+    )
+    review_window = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="Number of days participants can review their answers (null for unlimited)"
+    )
 
     def __str__(self):
         return self.title

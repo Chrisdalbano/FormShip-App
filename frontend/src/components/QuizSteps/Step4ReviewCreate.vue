@@ -163,7 +163,6 @@ function proceedManually() {
   if (!props.quizId) {
     console.error('Cannot proceed manually without a quiz ID.')
     router.push({ name: 'EditQuiz', params: { id: props.quizId } })
-
     return
   }
   router.push({ name: 'EditQuiz', params: { id: props.quizId } })
