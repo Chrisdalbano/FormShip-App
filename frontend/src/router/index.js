@@ -1,9 +1,8 @@
 // router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../store/auth'
-import axios from 'axios'
-import { useQuizStore } from '../store/quiz'
-import { useParticipantStore } from '../store/participant'
+import { useAuthStore } from '@/store/auth'
+import { useQuizStore } from '@/store/quiz'
+import apiService from '@/services/api'
 
 // Views
 import QuizDashboard from '../views/QuizDashboard.vue'
@@ -13,18 +12,13 @@ import AuthView from '@/views/AuthView.vue'
 import MyProfile from '@/views/MyProfile.vue'
 import AccountView from '@/views/AccountView.vue'
 import UsersView from '@/views/UsersView.vue'
-import QuizEventComponent from '@/views/QuizEventComponent.vue'
 import CompletedQuiz from '@/components/CompletedQuiz.vue'
 import ParticipantDetails from '@/components/ParticipantDetails.vue'
-import QuizAccessView from '@/views/QuizAccessView.vue'
 
 const fetchUsers = async (authStore) => {
   if (!authStore.account) return false
   try {
-    const response = await axios.get(
-      `/api/accounts/${authStore.account.id}/members/`,
-      { headers: { Authorization: `Bearer ${authStore.token}` } }
-    )
+    const response = await apiService.get(`/accounts/${authStore.account.id}/members/`)
     return Array.isArray(response.data) ? response.data : []
   } catch (error) {
     console.error('Failed to fetch users:', error)
@@ -49,44 +43,6 @@ const beforeEnterRoutesHandler = async (to, from, next) => {
   }
 }
 
-async function checkQuizAccess(quizId, isTestMode = false) {
-  try {
-    const response = await axios.get(`/api/quizzes/${quizId}/`)
-    const quiz = response.data
-    const authStore = useAuthStore()
-    
-    // Always allow account owners/admins in test mode
-    if (isTestMode && authStore.isAuthenticated) {
-      const isOwner = quiz.account === authStore.account?.id
-      const isAdmin = authStore.user?.role === 'admin'
-      if (isOwner || isAdmin) return { allowed: true, quiz }
-    }
-
-    // Handle different access controls
-    switch (quiz.access_control) {
-      case 'login_required':
-        return {
-          allowed: authStore.isAuthenticated,
-          quiz,
-          redirectTo: 'QuizAccess'
-        }
-      case 'invitation':
-        return {
-          allowed: false,
-          quiz,
-          redirectTo: 'QuizAccess'
-        }
-      case 'public':
-        return { allowed: true, quiz }
-      default:
-        return { allowed: false, quiz, redirectTo: 'QuizAccess' }
-    }
-  } catch (error) {
-    console.error('Error checking quiz access:', error)
-    return { allowed: false, error: true }
-  }
-}
-
 const routes = [
   {
     path: '/',
@@ -95,7 +51,18 @@ const routes = [
     meta: { requiresAuth: true },
     beforeEnter: beforeEnterRoutesHandler,
   },
-
+  {
+    path: '/quiz/access/:id',
+    name: 'QuizAccess',
+    component: () => import('@/components/QuizAccess.vue'),
+    props: true
+  },
+  {
+    path: '/quiz/:id',
+    name: 'QuizView',
+    component: () => import('@/components/QuizAccess.vue'),
+    props: true
+  },
   {
     path: '/create-quiz',
     name: 'CreateQuiz',
@@ -112,87 +79,18 @@ const routes = [
     beforeEnter: beforeEnterRoutesHandler,
   },
   {
-    path: '/quiz/access/:id',
-    name: 'QuizAccess',
-    component: QuizAccessView,
-    meta: { layout: 'blank' },
-    beforeEnter: async (to, from, next) => {
-      try {
-        const quizId = to.params.id
-        const response = await axios.get(`/api/quizzes/${quizId}/`)
-        const quiz = response.data
-        const authStore = useAuthStore()
-
-        // If FormShip user is logged in and is owner/admin, redirect to test mode
-        if (authStore.isAuthenticated) {
-          const isOwner = quiz.account === authStore.account?.id
-          const isAdmin = authStore.user?.role === 'admin'
-          if (isOwner || isAdmin) {
-            next({ 
-              name: 'QuizEvent', 
-              params: { id: quizId },
-              query: { test: 'true' }
-            })
-            return
-          }
-        }
-
-        // For all other cases, proceed to QuizAccess view
-        next()
-      } catch (error) {
-        console.error('Error loading quiz:', error)
-        next({ name: 'Error' })
-      }
-    }
-  },
-  {
-    path: '/quiz/invite/:id',
-    redirect: to => ({
-      name: 'QuizAccess',
-      params: { id: to.params.id }
-    })
-  },
-  {
-    path: '/quiz/event/:id',
+    path: '/quiz/:id/event',
     name: 'QuizEvent',
-    component: QuizEventComponent,
-    meta: { layout: 'blank' },
-    beforeEnter: async (to, from, next) => {
-      const isTestMode = to.query.test === 'true'
-      const participantStore = useParticipantStore()
-      const authStore = useAuthStore()
-
-      try {
-        const response = await axios.get(`/api/quizzes/${to.params.id}/`)
-        const quiz = response.data
-
-        // Allow if it's test mode and user is owner/admin
-        if (isTestMode && authStore.isAuthenticated) {
-          const isOwner = quiz.account === authStore.account?.id
-          const isAdmin = authStore.user?.role === 'admin'
-          if (isOwner || isAdmin) {
-            next()
-            return
-          }
-        }
-
-        // Allow if participant is authenticated for this quiz
-        if (participantStore.isAuthenticated && 
-            participantStore.currentQuiz?.id === to.params.id) {
-          next()
-          return
-        }
-
-        // Otherwise redirect to quiz access
-        next({
-          name: 'QuizAccess',
-          params: { id: to.params.id }
-        })
-      } catch (error) {
-        console.error('Error checking quiz access:', error)
-        next({ name: 'Error' })
-      }
-    }
+    component: () => import('@/views/QuizEvent.vue'),
+    props: true,
+    meta: { requiresAccess: true }
+  },
+  {
+    path: '/quiz/:id/results',
+    name: 'QuizResults',
+    component: () => import('@/views/QuizResults.vue'),
+    props: true,
+    meta: { requiresAccess: true }
   },
   {
     path: '/quiz-results/:id',
@@ -256,90 +154,72 @@ const routes = [
     meta: { layout: 'blank' }
   },
   {
-    path: '/participant/portal',
+    path: '/participant',
     name: 'ParticipantPortal',
     component: () => import('@/views/ParticipantPortal.vue'),
-    meta: { requiresParticipantAuth: true }
+    meta: { requiresAuth: true }
   },
   {
     path: '/participant/profile',
     name: 'ParticipantProfile',
     component: () => import('@/views/ParticipantProfile.vue'),
-    meta: { requiresParticipantAuth: true }
+    meta: { requiresAuth: true }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
-  routes,
-  beforeEach: async (to, from, next) => {
-    const participantStore = useParticipantStore()
-    const authStore = useAuthStore()
+  routes
+})
 
-    // Initialize participant store if needed
-    if (!participantStore.isInitialized) {
-      await participantStore.initializeFromStorage()
-    }
+// Navigation guards
+router.beforeEach(async (to, from, next) => {
+  const quizStore = useQuizStore()
+  const authStore = useAuthStore()
 
-    // Handle participant-only routes
-    if (to.meta.requiresParticipantAuth) {
-      if (!participantStore.isAuthenticated) {
-        next({
-          name: 'ParticipantLogin',
-          query: { redirect: to.fullPath }
-        })
-        return
-      }
-    }
-
-    // Handle FormShip-only routes
-    if (to.meta.requiresAuth) {
-      if (!authStore.isAuthenticated) {
-        next({
-          name: 'Login',
-          query: { redirect: to.fullPath }
-        })
-        return
-      }
-    }
-
-    // For quiz access, check both participant and FormShip auth
-    if (to.name === 'QuizAccess') {
-      const quizId = to.params.id
-      try {
-        const response = await axios.get(`/api/quizzes/${quizId}/`)
-        const quiz = response.data
-
-        // If FormShip user is owner/admin
-        if (authStore.isAuthenticated) {
-          const isOwner = quiz.account === authStore.account?.id
-          const isAdmin = authStore.user?.role === 'admin'
-          if (isOwner || isAdmin) {
-            next({
-              name: 'QuizEvent',
-              params: { id: quizId },
-              query: { test: 'true' }
-            })
-            return
-          }
-        }
-
-        // If participant is already authenticated for this quiz
-        if (participantStore.isAuthenticated && 
-            participantStore.currentQuiz?.id === quizId) {
-          next({
-            name: 'QuizEvent',
-            params: { id: quizId }
-          })
-          return
-        }
-      } catch (error) {
-        console.error('Error checking quiz access:', error)
-      }
-    }
-
-    next()
+  // Initialize store if needed
+  if (!quizStore.isInitialized) {
+    await quizStore.initializeFromStorage()
   }
+
+  // Handle routes requiring authentication
+  if (to.meta.requiresAuth) {
+    // Check for FormShip user authentication first
+    if (authStore.isAuthenticated) {
+      next()
+      return
+    }
+    // Then check for quiz participant authentication
+    if (!quizStore.isAuthenticated) {
+      next({ name: 'Auth', query: { redirect: to.fullPath } })
+      return
+    }
+  }
+
+  // Handle routes requiring quiz access
+  if (to.meta.requiresAccess) {
+    const quizId = to.params.id
+    try {
+      const result = await quizStore.verifyQuizAccess(quizId)
+      if (!result.success) {
+        next({ 
+          name: 'QuizAccess', 
+          params: { id: quizId },
+          replace: true 
+        })
+        return
+      }
+    } catch {
+      next({ 
+        name: 'QuizAccess', 
+        params: { id: quizId },
+        replace: true 
+      })
+      return
+    }
+  }
+
+  next()
 })
 
 export default router

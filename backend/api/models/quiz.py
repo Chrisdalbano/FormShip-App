@@ -142,20 +142,17 @@ class QuizEventLog(models.Model):
 
 class QuizSubmission(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="submissions")
-    participant = models.ForeignKey(
-        "api.Participant",  # Use string reference to avoid import
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="submissions",
-    )
-    answers = models.JSONField(default=dict)  # Stores submitted answers
-    score = models.FloatField(null=True, blank=True)  # Final calculated score
-    submitted_at = models.DateTimeField(default=now)
-    is_completed = models.BooleanField(default=True)  # Flag for completion
-    duration = models.IntegerField(null=True, blank=True)  # Time taken in seconds
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='submissions')
+    participant = models.ForeignKey('api.Participant', on_delete=models.CASCADE, related_name='submissions')
+    participation = models.ForeignKey('api.QuizParticipation', on_delete=models.CASCADE, related_name='submissions')
+    answers = models.JSONField()
+    score = models.FloatField(null=True, blank=True)
+    duration = models.IntegerField(null=True, blank=True, help_text='Duration in seconds')
+    is_completed = models.BooleanField(default=False)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
 
     def __str__(self):
-        participant_name = self.participant.name if self.participant else "Anonymous"
-        return f"Submission for {self.quiz.title} by {participant_name}"
+        return f"{self.participant.name}'s submission for {self.quiz.title}"

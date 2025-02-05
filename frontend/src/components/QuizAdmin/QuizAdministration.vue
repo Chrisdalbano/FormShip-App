@@ -79,6 +79,10 @@
             <label for="isTesting" class="ml-2">Enable Testing Mode?</label>
           </div>
           <div>
+            <input type="checkbox" id="allowReview" v-model="quiz.allow_review" />
+            <label for="allowReview" class="ml-2">Allow Participants to Review Results?</label>
+          </div>
+          <div>
             <label
               for="accessControl"
               class="block font-semibold text-gray-700 mb-2"
@@ -127,12 +131,52 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
 const quizId = route.params.id
 const quiz = ref({})
 const loading = ref(true)
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+
+// Create an axios instance with default headers
+const api = axios.create({
+  baseURL: apiBaseUrl,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Add request interceptor to always include the token
+api.interceptors.request.use(
+  config => {
+    if (authStore.token) {
+      config.headers.Authorization = `Bearer ${authStore.token}`
+    }
+    return config
+  },
+  error => {
+    return Promise.reject(error)
+  }
+)
+
+// Add response interceptor to handle token expiration
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    }
+    return Promise.reject(error)
+  }
+)
+
 const shareableUrl = computed(() => {
   if (!quiz.value?.is_published) {
     return 'Quiz is not published yet.'
@@ -158,10 +202,17 @@ onMounted(async () => {
 
 const fetchQuiz = async () => {
   try {
-    const res = await axios.get(`/api/quizzes/${quizId}/`)
+    const res = await api.get(`/quizzes/${quizId}/`)
     quiz.value = res.data
   } catch (err) {
     console.error('Error fetching quiz:', err)
+    if (err.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    } else {
+      alert('Failed to load quiz. Please try again.')
+    }
   } finally {
     loading.value = false
   }
@@ -169,31 +220,54 @@ const fetchQuiz = async () => {
 
 const saveSettings = async () => {
   try {
-    const res = await axios.patch(`/api/quizzes/${quizId}/update-status/`, {
-      is_published: quiz.value.is_published,
+    // First, update the publish status
+    if (quiz.value.is_published) {
+      await api.patch(`/quizzes/${quizId}/update-status/`, {
+        action: 'publish'
+      })
+    } else {
+      await api.patch(`/quizzes/${quizId}/update-status/`, {
+        action: 'unpublish'
+      })
+    }
+
+    // Then update the quiz details
+    const res = await api.put(`/quizzes/${quizId}/`, {
       is_testing: quiz.value.is_testing,
       access_control: quiz.value.access_control,
+      allow_review: quiz.value.allow_review
     })
+    
     quiz.value = res.data
     alert('Quiz settings saved successfully!')
   } catch (err) {
     console.error('Error saving quiz settings:', err)
-    alert('Failed to save quiz settings.')
+    if (err.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    } else {
+      alert('Failed to save quiz settings. Please try again.')
+    }
   }
 }
 
 const publishQuiz = async () => {
   try {
-    const res = await axios.patch(`/api/quizzes/${quizId}/update-status/`, {
-      is_published: true,
-      access_control: quiz.value.access_control
+    const res = await api.patch(`/quizzes/${quizId}/update-status/`, {
+      action: 'publish'
     })
     quiz.value = res.data
-    await fetchQuiz()
     alert('Quiz published successfully!')
   } catch (err) {
     console.error('Error publishing quiz:', err)
-    alert('Failed to publish quiz.')
+    if (err.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    } else {
+      alert('Failed to publish quiz. Please try again.')
+    }
   }
 }
 

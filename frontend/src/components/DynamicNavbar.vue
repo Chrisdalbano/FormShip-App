@@ -49,7 +49,7 @@
       </template>
 
       <!-- Participant Navigation -->
-      <template v-else-if="participantStore.isAuthenticated">
+      <template v-else-if="quizStore.isAuthenticated">
         <router-link 
           to="/participant/portal" 
           class="text-white hover:text-blue-100"
@@ -64,7 +64,7 @@
         </router-link>
         <div class="flex items-center">
           <span class="text-white mr-4">
-            {{ participantStore.participant.name }}
+            {{ displayParticipantName }}
           </span>
           <button 
             @click="handleParticipantLogout"
@@ -88,12 +88,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../store/auth'
-import { useParticipantStore } from '../store/participant'
+import { useAuthStore } from '@/store/auth'
+import { useQuizStore } from '@/store/quiz'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const participantStore = useParticipantStore()
+const quizStore = useQuizStore()
 const showDropdown = ref(false)
 
 const formshipMenuItems = [
@@ -112,6 +112,10 @@ const displayUser = computed(() => {
   return 'Account'
 })
 
+const displayParticipantName = computed(() => {
+  return quizStore.participant?.name || 'Guest'
+})
+
 const toggleDropdown = () => {
   showDropdown.value = !showDropdown.value
 }
@@ -125,8 +129,8 @@ const handleFormshipLogout = () => {
   closeDropdown()
 }
 
-const handleParticipantLogout = () => {
-  participantStore.clearParticipant()
+const handleParticipantLogout = async () => {
+  await quizStore.clearParticipantData()
   router.push('/participant/login')
 }
 </script> 

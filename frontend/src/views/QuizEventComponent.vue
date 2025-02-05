@@ -240,13 +240,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useQuizStore } from '../store/quiz'
-import { useParticipantStore } from '../store/participant'
+import { useQuizStore } from '@/store/quiz'
+import { useAuthStore } from '@/store/auth'
 import CompletedQuiz from '@/components/CompletedQuiz.vue'
 
+defineProps({
+  id: {
+    type: String,
+    required: true,
+  },
+})
+
 const route = useRoute()
+// const router = useRouter()
 const quizStore = useQuizStore()
-const participantStore = useParticipantStore()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -272,16 +280,22 @@ const score = computed(() => {
   }, 0)
 })
 
-// Add this with the other computed properties
 const totalQuestions = computed(() => quiz.value?.questions?.length || 0)
 
 onMounted(async () => {
   try {
     await quizStore.loadQuiz(route.params.id)
 
-    // Set current quiz in participant store if not already set
-    if (participantStore.isAuthenticated && !participantStore.currentQuiz) {
-      participantStore.setCurrentQuiz(quizStore.quiz)
+    // Check access permissions
+    if (!authStore.isAuthenticated && !quiz.value.is_published) {
+      errorMessage.value = 'This quiz is not available.'
+      loading.value = false
+      return
+    }
+
+    // Set current quiz in store if participant is authenticated
+    if (quizStore.isAuthenticated && !quizStore.currentQuiz) {
+      await quizStore.setCurrentQuiz(quiz.value)
     }
 
     loading.value = false
@@ -318,6 +332,14 @@ const submitQuiz = async () => {
   submitting.value = true
 
   try {
+    // If in testing mode (FormShip user), just show results without submitting to backend
+    if (authStore.isAuthenticated && route.query.test === 'true') {
+      showResults.value = true
+      submitting.value = false
+      return
+    }
+
+    // For participants, submit to backend
     await quizStore.submitAnswers(userAnswers.value)
     showResults.value = true
   } catch (err) {

@@ -58,7 +58,7 @@ export const useAuthStore = defineStore('auth', {
       localStorage.removeItem('jwt');
       sessionStorage.removeItem('jwt');
       if (router) {
-        router.push('/auth');
+        router.push({ name: 'Auth' });
       }
     },
     initializeAuth() {

@@ -12,6 +12,12 @@ class ParticipantJWTAuthentication(JWTAuthentication):
                 raise AuthenticationFailed('No participant ID in token')
                 
             participant = Participant.objects.get(id=participant_id)
+            
+            # Ensure the participant is properly authenticated
+            if not participant.is_authenticated_user:
+                participant.is_authenticated_user = True
+                participant.save()
+                
             return participant
         except Participant.DoesNotExist:
             raise AuthenticationFailed('Participant not found')

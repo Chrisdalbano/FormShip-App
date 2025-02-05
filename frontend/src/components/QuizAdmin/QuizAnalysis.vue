@@ -51,20 +51,47 @@
           <thead>
             <tr class="bg-gray-200">
               <th class="py-2 px-4">Participant</th>
+              <th class="py-2 px-4">Email</th>
               <th class="py-2 px-4">Score</th>
+              <th class="py-2 px-4">Duration</th>
+              <th class="py-2 px-4">Started At</th>
               <th class="py-2 px-4">Completed At</th>
-              <th class="py-2 px-4">Needs Grading?</th>
+              <th class="py-2 px-4">Status</th>
+              <th class="py-2 px-4">Actions</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="attempt in attempts" :key="attempt.id" class="border-t">
+            <tr v-for="attempt in attempts" :key="attempt.id" class="border-t hover:bg-gray-50">
+              <td class="py-2 px-4">{{ attempt.participant_name || 'Anonymous' }}</td>
+              <td class="py-2 px-4">{{ attempt.participant_email || 'N/A' }}</td>
               <td class="py-2 px-4">
-                {{ attempt.participant_name || 'Anonymous' }}
+                <span :class="getScoreClass(attempt.final_score)">
+                  {{ attempt.final_score !== null ? `${attempt.final_score}%` : 'N/A' }}
+                </span>
               </td>
-              <td class="py-2 px-4">{{ attempt.final_score ?? 'N/A' }}</td>
-              <td class="py-2 px-4">{{ attempt.completed_at }}</td>
+              <td class="py-2 px-4">{{ formatDuration(attempt.duration) }}</td>
+              <td class="py-2 px-4">{{ formatDate(attempt.started_at) }}</td>
+              <td class="py-2 px-4">{{ formatDate(attempt.completed_at) }}</td>
               <td class="py-2 px-4">
-                {{ attempt.needs_manual_grading ? 'Yes' : 'No' }}
+                <span :class="getStatusClass(attempt)">
+                  {{ getStatusText(attempt) }}
+                </span>
+              </td>
+              <td class="py-2 px-4">
+                <button
+                  v-if="attempt.needs_manual_grading"
+                  @click="gradeAttempt(attempt)"
+                  class="text-sm bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600"
+                >
+                  Grade
+                </button>
+                <button
+                  v-else
+                  @click="viewAttemptDetails(attempt)"
+                  class="text-sm bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                >
+                  View
+                </button>
               </td>
             </tr>
           </tbody>
@@ -78,9 +105,10 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/store/auth'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const quizId = route.params.id
 const authStore = useAuthStore()
 
@@ -91,6 +119,41 @@ const loading = ref(true)
 const awaitingGrading = computed(() =>
   attempts.value.filter(a => a.needs_manual_grading),
 )
+
+const getScoreClass = (score) => {
+  if (score === null) return ''
+  if (score >= 80) return 'text-green-600 font-semibold'
+  if (score >= 60) return 'text-yellow-600 font-semibold'
+  return 'text-red-600 font-semibold'
+}
+
+const getStatusClass = (attempt) => {
+  if (attempt.needs_manual_grading) return 'text-yellow-600 font-semibold'
+  if (!attempt.completed_at) return 'text-gray-600'
+  return 'text-green-600 font-semibold'
+}
+
+const getStatusText = (attempt) => {
+  if (attempt.needs_manual_grading) return 'Needs Grading'
+  if (!attempt.completed_at) return 'In Progress'
+  return 'Completed'
+}
+
+const formatDate = (date) => {
+  if (!date) return 'N/A'
+  return new Date(date).toLocaleString()
+}
+
+const formatDuration = (seconds) => {
+  if (!seconds) return 'N/A'
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}m ${remainingSeconds}s`
+}
+
+const viewAttemptDetails = (attempt) => {
+  router.push(`/quiz/${quizId}/attempt/${attempt.id}`)
+}
 
 const fetchQuiz = async () => {
   try {

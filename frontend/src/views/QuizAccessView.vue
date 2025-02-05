@@ -1,181 +1,94 @@
 <template>
-  <div class="quiz-access-container p-6 max-w-lg mx-auto">
-    <h2 class="text-xl font-bold mb-4">{{ quiz?.title }}</h2>
+  <div class="min-h-screen bg-gray-50 py-8">
+    <div v-if="loading" class="flex justify-center items-center min-h-[50vh]">
+      <div class="text-center">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p class="mt-4 text-gray-600">Loading quiz...</p>
+      </div>
+    </div>
 
-    <div v-if="loading" class="text-center">Loading quiz access...</div>
-
-    <div v-else-if="errorMessage" class="text-red-500">{{ errorMessage }}</div>
+    <div v-else-if="error" class="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <div class="text-center text-red-600">
+        {{ error }}
+      </div>
+    </div>
 
     <div v-else>
-      <!-- Use ParticipantAuth for authentication -->
-      <ParticipantAuth
-        v-if="showParticipantAuth"
+      <!-- Show QuizAccessGate when access control is required -->
+      <QuizAccessGate
+        v-if="quiz && requiredAction"
         :quiz="quiz"
-        @auth-success="handleAuthSuccess"
+        :required-action="requiredAction"
+        @access-granted="handleAccessGranted"
       />
 
-      <!-- Invitation Validation -->
-      <div v-else-if="showInvitationPrompt" class="mb-6">
-        <p class="text-blue-600 mb-4">This quiz requires an invitation.</p>
-        <div class="email-validation">
-          <input
-            v-model="email"
-            type="email"
-            placeholder="Enter your email"
-            class="input-field mb-2"
-          />
-          <button @click="validateInvitation" class="btn btn-primary">
-            Validate Invitation
-          </button>
-        </div>
-      </div>
-
-      <!-- Public Access -->
-      <div v-else>
-        <div v-if="quiz?.require_name" class="mb-4">
-          <label class="block mb-2">Your Name</label>
-          <input
-            v-model="participantName"
-            type="text"
-            class="input-field"
-            placeholder="Enter your name"
-          />
-        </div>
-
-        <button
-          @click="proceedToQuiz"
-          class="btn btn-primary w-full"
-          :disabled="!canProceed"
-        >
-          Start Quiz
-        </button>
+      <!-- Show loading state while redirecting -->
+      <div v-else-if="redirecting" class="text-center py-8">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p class="mt-4 text-gray-600">Redirecting to quiz...</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import axios from 'axios'
-// import { useAuthStore } from '../store/auth'
-import ParticipantAuth from '../components/ParticipantAuth.vue'
-import { useParticipantStore } from '@/store/participant'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAxios } from '@/composables/useAxios'
+import QuizAccessGate from '@/components/QuizAccessGate.vue'
 
 const route = useRoute()
 const router = useRouter()
-const quizId = route.params.id
+const { axiosInstance } = useAxios()
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+
 const quiz = ref(null)
-const errorMessage = ref('')
-const participantName = ref('')
-const email = ref('')
 const loading = ref(true)
-const isEmailValidated = ref(false)
-const showParticipantAuth = ref(false)
-const showInvitationPrompt = ref(false)
+const error = ref(null)
+const requiredAction = ref(null)
+const redirecting = ref(false)
 
+const loadQuiz = async () => {
+  loading.value = true
+  error.value = null
+  requiredAction.value = null
 
-onMounted(async () => {
   try {
-    const participantStore = useParticipantStore()
-    
-    // First check if participant is already authenticated
-    if (participantStore.isAuthenticated) {
-      console.log('[QuizAccess] Participant already authenticated')
-      
-      // Get quiz details first
-      const response = await axios.get(`/api/quizzes/${quizId}/`)
-      quiz.value = response.data
-      
-      // Set current quiz in store
-      participantStore.setCurrentQuiz(quiz.value)
-      
-      // Directly proceed to quiz
-      router.push({
-        name: 'QuizEvent',
-        params: { id: quizId }
-      })
-      return
-    }
-
-    // If not authenticated, get quiz details and show appropriate access form
-    const response = await axios.get(`/api/quizzes/${quizId}/`)
+    const response = await axiosInstance.get(`${apiBaseUrl}/quizzes/${route.params.id}/`)
     quiz.value = response.data
-    
-    // Handle participant access for non-authenticated users
-    switch (quiz.value.access_control) {
-      case 'login_required':
-        showParticipantAuth.value = true
-        break
-      case 'invitation':
-        showInvitationPrompt.value = true
-        break
-      case 'public':
-        // Allow direct access
-        break
+    // If we get here, we have access - redirect to quiz
+    redirectToQuiz()
+  } catch (err) {
+    if (err.response?.status === 403) {
+      const data = err.response.data
+      requiredAction.value = data.required_action
+      quiz.value = {
+        id: route.params.id,
+        title: data.quiz_title,
+        access_control: data.access_control,
+        is_published: data.is_published
+      }
+    } else {
+      error.value = err.response?.data?.detail || 'Failed to load quiz'
     }
-  } catch (error) {
-    console.error('Failed to load quiz:', error)
-    errorMessage.value = 'Failed to load quiz.'
   } finally {
     loading.value = false
   }
-})
-
-const canProceed = computed(() => {
-  if (quiz.value?.access_control === 'invitation' && !isEmailValidated.value) {
-    return false
-  }
-  if (quiz.value?.require_name && !participantName.value) {
-    return false
-  }
-  return true
-})
-
-const validateInvitation = async () => {
-  try {
-    const response = await axios.post(
-      `/api/quizzes/${quizId}/validate-invitation/`,
-      {
-        email: email.value,
-      },
-    )
-    if (response.data.valid) {
-      isEmailValidated.value = true
-    } else {
-      errorMessage.value = 'Email not found in invitation list'
-    }
-  // eslint-disable-next-line no-unused-vars
-  } catch (error) {
-    errorMessage.value = 'Failed to validate invitation'
-  }
 }
 
-const handleAuthSuccess = async (participantData) => {
-  const participantStore = useParticipantStore()
-  
-  // Set the participant data in the store
-  await participantStore.setParticipantData({
-    ...participantData,
-    currentQuiz: quiz.value
-  })
-  
-  // Navigate to quiz
-  router.push({
+const handleAccessGranted = async () => {
+  // Reload quiz to verify access and get full quiz data
+  await loadQuiz()
+}
+
+const redirectToQuiz = () => {
+  redirecting.value = true
+  // Redirect to the actual quiz page
+  router.replace({
     name: 'QuizEvent',
-    params: { id: quizId },
+    params: { id: route.params.id }
   })
 }
-</script>
 
-<style scoped>
-.btn {
-  @apply px-4 py-2 rounded-lg font-medium transition-colors;
-}
-.btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
-}
-.input-field {
-  @apply w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500;
-}
-</style>
+onMounted(loadQuiz)
+</script>

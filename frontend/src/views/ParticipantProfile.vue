@@ -90,6 +90,7 @@ onMounted(async () => {
     const response = await axios.get('/api/participants/me/')
     form.value.name = response.data.name
     form.value.email = response.data.email
+  // eslint-disable-next-line no-unused-vars
   } catch (err) {
     error.value = 'Failed to load profile'
   } finally {
@@ -131,9 +132,9 @@ const confirmDelete = async () => {
       isLoading.value = true
       await axios.delete('/api/participants/me/delete/')
       participantStore.clearParticipant()
-      router.push('/')
+      router.push('/participant/login')
     } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to delete account'
+      error.value = err.response?.data?.detail || 'Failed to delete account'
     } finally {
       isLoading.value = false
     }

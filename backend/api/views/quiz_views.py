@@ -1,47 +1,49 @@
 import os
 from django.conf import settings
 from django.http import JsonResponse
-
-# from django.db import IntegrityError
 from django.utils.timezone import now
-
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import viewsets
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from ..services.quiz_creation_service import QuizCreationService, QuizCreationError
-
-# If you rely on OpenAI for quiz generation:
 from openai import OpenAI
-
 from ..models.user import AccountMembership
-
-from ..models.participant import Participant
+from ..models.participant import Participant, QuizParticipation
 from ..models.quiz import Quiz, SharedQuiz, QuizEventLog, QuizSubmission
 from ..models.group import Group
 from ..models.question import Question
-from ..serializers.quiz_serializer import QuizSerializer, SharedQuizSerializer
+from ..serializers.quiz_serializer import (
+    QuizSerializer, 
+    SharedQuizSerializer,
+    InvitedUserSerializer,
+    QuizSubmissionSerializer
+)
 from ..serializers.question_serializer import QuestionSerializer
-
-# If you have an InvitedUser model & serializer:
 from ..models.quiz_invite import InvitedUser
-from ..serializers.quiz_serializer import InvitedUserSerializer
-from ..serializers.quiz_serializer import QuizSubmissionSerializer
-
 from ..authentication import ParticipantJWTAuthentication
+from ..permissions import (
+    IsFormShipUser,
+    IsParticipant,
+    IsQuizOwnerOrAdmin,
+    IsQuizParticipant,
+    CanTestQuiz
+)
+from ..services.quiz_access_service import QuizAccessService
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 @api_view(["GET", "POST"])
-@permission_classes([IsAuthenticated])  # if you want only authenticated users
+@permission_classes([IsFormShipUser])
 def list_quizzes(request):
     """
     GET: Lists quizzes belonging to the user's account (with optional group filters).
-    POST: Could call create_quiz internally or do the same logic (but usually you'd just call /create/).
+    POST: Creates a new quiz.
     """
     if request.method == "GET":
         account = request.user.accounts.first()
@@ -53,7 +55,7 @@ def list_quizzes(request):
 
         quizzes = Quiz.objects.filter(account=account)
 
-        # Optional filters:
+        # Optional filters
         group_id = request.query_params.get("group_id", None)
         if group_id:
             quizzes = quizzes.filter(group__id=group_id)
@@ -69,35 +71,24 @@ def list_quizzes(request):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     elif request.method == "POST":
-        # Optionally just forward to create_quiz
         return create_quiz(request)
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsFormShipUser])
 def create_quiz(request):
-    """
-    Creates a new quiz, optionally leveraging AI to generate questions.
-    """
-    # 1) Ensure user has an account
+    """Creates a new quiz, optionally leveraging AI to generate questions."""
     account = request.user.accounts.first()
     if not account:
         return Response(
-            {"error": "No account associated with the user."},
+            {"error": "No account associated with this user."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # 2) Instantiate the service
     service = QuizCreationService(openai_client=client)
 
     try:
-        # 3) Use the service to parse, call AI, and create the quiz
         quiz_obj, question_objs = service.create_quiz_with_ai(account, request.data)
-
-        # 4) Serialize and return
-        from ..serializers.quiz_serializer import QuizSerializer
-        from ..serializers.question_serializer import QuestionSerializer
-
         quiz_serializer = QuizSerializer(quiz_obj)
         question_serializer = QuestionSerializer(question_objs, many=True)
         data_out = {
@@ -105,18 +96,11 @@ def create_quiz(request):
             "questions": question_serializer.data,
             "id": quiz_obj.id,
         }
-        print("Returning quiz creation response:", data_out)
         return Response(data_out, status=status.HTTP_201_CREATED)
 
-    except ValueError as e:
-        print(f"ValueError in create_quiz: {e}")
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    except QuizCreationError as e:
-        print(f"QuizCreationError in create_quiz: {e}")
+    except (ValueError, QuizCreationError) as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as exc:
-        # Enhanced error logging
-        print(f"Unexpected error in create_quiz: {exc}")
         return Response(
             {"error": f"Unexpected server error: {str(exc)}"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -124,70 +108,80 @@ def create_quiz(request):
 
 
 @api_view(["GET", "PUT", "DELETE"])
-@permission_classes([AllowAny])
-@authentication_classes([ParticipantJWTAuthentication])
+@permission_classes([IsFormShipUser | IsParticipant])
+@authentication_classes([JWTAuthentication, ParticipantJWTAuthentication])
 def quiz_detail(request, quiz_id):
     """
-    Retrieve, update, or delete a quiz.
-    On PUT, can also handle optional "questions" data if you'd like bulk updates.
+    GET: Retrieve quiz details (accessible by both FormShip users and participants)
+    PUT: Update quiz (FormShip users only)
+    DELETE: Delete quiz (FormShip users only)
     """
     quiz_obj = get_object_or_404(Quiz, id=quiz_id)
 
-    # For update/delete, ensure user is owner or admin in the quiz's account
-    if request.method in ["PUT", "DELETE"]:
-        # 1) Find membership for request.user in the quiz's account
+    if request.method == "GET":
+        # Check permissions based on user type
+        if hasattr(request.user, 'accounts'):
+            # FormShip user - check account membership
+            membership = AccountMembership.objects.filter(
+                account=quiz_obj.account, user=request.user
+            ).first()
+            if not membership:
+                return Response({"error": "Permission denied."}, status=403)
+        else:
+            # Participant - check if invited and quiz is published
+            if not quiz_obj.is_published and not quiz_obj.participations.filter(participant=request.user).exists():
+                return Response({"error": "This quiz is not available."}, status=403)
+
+        serializer = QuizSerializer(quiz_obj)
+        return Response(serializer.data)
+
+    elif request.method in ["PUT", "DELETE"]:
+        # Only FormShip users with owner/admin role can modify
+        if not hasattr(request.user, 'accounts'):
+            return Response({"error": "Permission denied."}, status=403)
+            
         membership = AccountMembership.objects.filter(
             account=quiz_obj.account, user=request.user
         ).first()
-
-        # 2) If membership doesn't exist or role isn't "owner"/"admin", forbid
         if not membership or membership.role not in ["owner", "admin"]:
             return Response({"error": "Permission denied."}, status=403)
 
-    if request.method == "GET":
-        # Allow participants to view the quiz
-        serializer = QuizSerializer(quiz_obj)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        if request.method == "PUT":
+            serializer = QuizSerializer(quiz_obj, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save()
 
-    elif request.method == "PUT":
-        # Update quiz fields
-        serializer = QuizSerializer(quiz_obj, data=request.data, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer.save()
+            # Handle question updates if present
+            questions_data = request.data.get("questions", [])
+            if questions_data:
+                updated_questions = []
+                for q_item in questions_data:
+                    q_id = q_item.get("id")
+                    if q_id:
+                        try:
+                            existing_q = quiz_obj.questions.get(id=q_id)
+                            q_serializer = QuestionSerializer(
+                                existing_q, data=q_item, partial=True
+                            )
+                            if q_serializer.is_valid():
+                                q_serializer.save()
+                                updated_questions.append(q_serializer.data)
+                        except Question.DoesNotExist:
+                            continue
+                    else:
+                        q_item["quiz"] = quiz_obj.id
+                        new_q_serializer = QuestionSerializer(data=q_item)
+                        if new_q_serializer.is_valid():
+                            new_q_obj = new_q_serializer.save()
+                            updated_questions.append(QuestionSerializer(new_q_obj).data)
 
-        # Optionally handle question updates if request.data has "questions"
-        questions_data = request.data.get("questions", [])
-        if questions_data:
-            updated_questions = []
-            for q_item in questions_data:
-                q_id = q_item.get("id")
-                if q_id:  # update existing question
-                    try:
-                        existing_q = quiz_obj.questions.get(id=q_id)
-                    except Question.DoesNotExist:
-                        continue  # skip or handle differently
-                    q_serializer = QuestionSerializer(
-                        existing_q, data=q_item, partial=True
-                    )
-                    if q_serializer.is_valid():
-                        q_serializer.save()
-                        updated_questions.append(q_serializer.data)
-                else:
-                    # create new question
-                    q_item["quiz"] = quiz_obj.id
-                    new_q_serializer = QuestionSerializer(data=q_item)
-                    if new_q_serializer.is_valid():
-                        new_q_obj = new_q_serializer.save()
-                        updated_questions.append(QuestionSerializer(new_q_obj).data)
+            updated_quiz_serializer = QuizSerializer(quiz_obj)
+            return Response(updated_quiz_serializer.data)
 
-        # Return the updated quiz
-        updated_quiz_serializer = QuizSerializer(quiz_obj)
-        return Response(updated_quiz_serializer.data, status=status.HTTP_200_OK)
-
-    elif request.method == "DELETE":
-        quiz_obj.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        else:  # DELETE
+            quiz_obj.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["POST"])
@@ -362,74 +356,23 @@ def log_quiz_event(request, quiz_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@authentication_classes([ParticipantJWTAuthentication])
-def submit_quiz(request, quiz_id):
-    """Handles quiz submissions and records the results."""
-    print("[Submit Quiz] Request received:", request.data)
-    print("[Submit Quiz] Auth:", request.auth)
-    print("[Submit Quiz] User:", request.user)
-    
-    quiz = get_object_or_404(Quiz, id=quiz_id)
-    participant_id = request.data.get("participant_id")
-    answers = request.data.get("answers", [])
-    score = request.data.get("score", 0)
-    duration = request.data.get("duration", None)
-
-    if not participant_id or answers is None:
-        return Response(
-            {"error": "Participant ID and answers are required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    # Get participant
-    participant = Participant.objects.filter(id=participant_id).first()
-    if not participant:
-        return Response(
-            {"error": "Participant not found.", "code": "participant_not_found"},
-            status=status.HTTP_404_NOT_FOUND
-        )
-
-    try:
-        # Save the submission
-        submission = QuizSubmission.objects.create(
-            quiz=quiz,
-            participant=participant,
-            answers=answers,
-            score=score,
-            duration=duration,
-            is_completed=True,
-        )
-        serializer = QuizSubmissionSerializer(submission)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    except Exception as e:
-        print("[Submit Quiz] Error:", str(e))
-        return Response(
-            {"error": str(e)}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
 @api_view(["PATCH"])
+@permission_classes([IsFormShipUser & IsQuizOwnerOrAdmin])
 def update_quiz_status(request, quiz_id):
-    """
-    Update specific fields of a quiz (e.g., is_published, is_testing).
-    """
+    """Update quiz status (publish/unpublish)"""
     quiz = get_object_or_404(Quiz, id=quiz_id)
-
-    # Only allow updates to specific fields
-    allowed_fields = ["is_published", "is_testing", "access_control"]
-    for field in allowed_fields:
-        if field in request.data:
-            setattr(quiz, field, request.data[field])
-
+    
+    status_action = request.data.get("action")
+    if status_action not in ["publish", "unpublish"]:
+        return Response(
+            {"error": "Invalid action. Use 'publish' or 'unpublish'."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+        
+    quiz.is_published = status_action == "publish"
     quiz.save()
-
-    # Return the updated quiz data
-    serializer = QuizSerializer(quiz)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    return Response(QuizSerializer(quiz).data)
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -472,3 +415,114 @@ def add_invitations(request, quiz_id):
     
     serializer = InvitedUserSerializer(created_invites, many=True)
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsFormShipUser | (IsParticipant & IsQuizParticipant)])
+def submit_quiz(request, quiz_id):
+    """Submit quiz answers - available to both FormShip users (testing) and participants"""
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    
+    # Handle FormShip users (testing mode)
+    if hasattr(request.user, 'accounts'):
+        if not CanTestQuiz().has_object_permission(request, None, quiz):
+            return Response({"error": "Permission denied."}, status=403)
+    # Handle participants
+    else:
+        if not quiz.is_published and not IsQuizParticipant().has_object_permission(request, None, quiz):
+            return Response({"error": "This quiz is not available."}, status=403)
+    
+    serializer = QuizSubmissionSerializer(data=request.data)
+    if serializer.is_valid():
+        submission = serializer.save(
+            quiz=quiz,
+            participant=request.user if hasattr(request.user, 'final_score') else None
+        )
+        return Response(QuizSubmissionSerializer(submission).data, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_quiz(request, quiz_id):
+    """
+    Get quiz details with access control
+    """
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    
+    # Get participant from token if available
+    participant = None
+    if 'Authorization' in request.headers:
+        try:
+            # Try participant authentication first
+            auth = ParticipantJWTAuthentication()
+            participant = auth.authenticate(request)[0]
+        except Exception:
+            # If participant auth fails, try FormShip user auth
+            try:
+                auth = JWTAuthentication()
+                participant = auth.authenticate(request)[0]
+            except Exception:
+                pass
+    
+    # Check access using service
+    has_access, error_message, required_action = QuizAccessService.check_quiz_access(
+        quiz=quiz,
+        participant=participant,
+        email=request.query_params.get('email')
+    )
+    
+    if not has_access:
+        response_data = {
+            'detail': error_message,
+            'required_action': required_action,
+            'quiz_title': quiz.title,
+            'access_control': quiz.access_control,
+            'is_published': quiz.is_published
+        }
+        return Response(response_data, status=status.HTTP_403_FORBIDDEN)
+    
+    # If we have a participant and they have access, link them to the quiz
+    if participant and not hasattr(participant, 'accounts'):
+        QuizAccessService.link_participant_to_quiz(participant, quiz)
+    
+    # Use different serializers based on user type
+    if hasattr(participant, 'accounts'):
+        # FormShip user gets full quiz details
+        serializer = QuizSerializer(quiz, context={'request': request})
+    else:
+        # Participant gets limited quiz details
+        serializer = QuizSerializer(quiz, context={'request': request})
+    
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_quiz_access(request, quiz_id):
+    """
+    Verify access requirements for a quiz (password, invitation, etc)
+    """
+    quiz = get_object_or_404(Quiz, id=quiz_id)
+    
+    # Handle password verification
+    if quiz.access_control == 'password':
+        try:
+            QuizAccessService.verify_quiz_password(quiz, request.data.get('password'))
+            return Response({'detail': 'Access granted'})
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_403_FORBIDDEN)
+            
+    # Handle invitation verification
+    if quiz.access_control == 'invitation':
+        email = request.data.get('email')
+        has_access, error_message, _ = QuizAccessService.check_quiz_access(
+            quiz=quiz,
+            email=email
+        )
+        if has_access:
+            return Response({'detail': 'Invitation verified'})
+        return Response({'detail': error_message}, status=status.HTTP_403_FORBIDDEN)
+        
+    return Response({'detail': 'Invalid verification request'}, status=status.HTTP_400_BAD_REQUEST)

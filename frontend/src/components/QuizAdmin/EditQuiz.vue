@@ -263,8 +263,6 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-
-
 const quizId = route.params.id
 const loading = ref(true)
 
@@ -309,7 +307,9 @@ const apiBaseUrl =
 
 onMounted(async () => {
   try {
-    const res = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`)
+    const res = await axios.get(`${apiBaseUrl}/quizzes/${quizId}/`, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
     quiz.value = res.data
     // For each question, figure out how many options are actually used
     quiz.value.questions.forEach(q => {
@@ -317,10 +317,50 @@ onMounted(async () => {
     })
   } catch (err) {
     console.error('Error fetching quiz data:', err)
+    if (err.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    } else {
+      alert('Failed to load quiz. Please try again.')
+    }
   } finally {
     loading.value = false
   }
 })
+
+// Create an axios instance with default headers
+const api = axios.create({
+  baseURL: apiBaseUrl,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+})
+
+// Add request interceptor to always include the token
+api.interceptors.request.use(
+  config => {
+    if (authStore.token) {
+      config.headers.Authorization = `Bearer ${authStore.token}`
+    }
+    return config
+  },
+  error => {
+    return Promise.reject(error)
+  }
+)
+
+// Add response interceptor to handle token expiration
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      authStore.logout()
+      router.push('/login')
+    }
+    return Promise.reject(error)
+  }
+)
 
 /**
  * Submits updated quiz info to the backend (PUT /quizzes/:id/).
@@ -353,7 +393,6 @@ const updateQuiz = async () => {
       allow_anonymous: quiz.value.allow_anonymous,
       require_name: quiz.value.require_name,
 
-      // You might also need question_count or difficulty if your backend requires them
       question_count: quiz.value.questions.length,
       difficulty: quiz.value.difficulty || 'medium',
 
@@ -361,9 +400,7 @@ const updateQuiz = async () => {
     }
 
     // 1. Update the main quiz
-    await axios.put(`${apiBaseUrl}/quizzes/${quizId}/`, payload, {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
+    await api.put(`/quizzes/${quizId}/`, payload)
 
     // 2. Update or create each question
     for (const question of quiz.value.questions) {
@@ -379,23 +416,11 @@ const updateQuiz = async () => {
 
       if (question.id) {
         // Existing question => PUT
-        await axios.put(
-          `${apiBaseUrl}/questions/${question.id}/`,
-          questionData,
-          {
-            headers: { Authorization: `Bearer ${authStore.token}` },
-          },
-        )
+        await api.put(`/questions/${question.id}/`, questionData)
       } else {
         // New question => POST
         questionData.quiz = quizId
-        await axios.post(
-          `${apiBaseUrl}/quizzes/${quizId}/questions/`,
-          questionData,
-          {
-            headers: { Authorization: `Bearer ${authStore.token}` },
-          },
-        )
+        await api.post(`/quizzes/${quizId}/questions/`, questionData)
       }
     }
 
@@ -403,7 +428,13 @@ const updateQuiz = async () => {
     router.push({ name: 'QuizDashboard' })
   } catch (error) {
     console.error('Error updating quiz:', error.response?.data || error)
-    alert('Failed to update quiz. Check console for details.')
+    if (error.response?.status === 401) {
+      alert('Your session has expired. Please log in again.')
+      authStore.logout()
+      router.push('/login')
+    } else {
+      alert('Failed to update quiz. Please try again.')
+    }
   }
 }
 
@@ -445,12 +476,17 @@ const deleteQuestion = async index => {
   const q = quiz.value.questions[index]
   if (q.id) {
     try {
-      await axios.delete(`${apiBaseUrl}/questions/${q.id}/`, {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      })
+      await api.delete(`/questions/${q.id}/`)
     } catch (err) {
       console.error('Error deleting question:', err)
-      alert('Failed to delete question from server.')
+      if (err.response?.status === 401) {
+        alert('Your session has expired. Please log in again.')
+        authStore.logout()
+        router.push('/login')
+      } else {
+        alert('Failed to delete question. Please try again.')
+      }
+      return
     }
   }
   quiz.value.questions.splice(index, 1)

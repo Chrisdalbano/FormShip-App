@@ -79,4 +79,15 @@ class InvitedUserSerializer(serializers.ModelSerializer):
 class QuizSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizSubmission
-        fields = "__all__"  # Use all fields or specify if required
+        fields = [
+            'id', 
+            'quiz', 
+            'participant', 
+            'participation',
+            'answers', 
+            'score', 
+            'duration', 
+            'is_completed', 
+            'submitted_at'
+        ]
+        read_only_fields = ['id', 'submitted_at']

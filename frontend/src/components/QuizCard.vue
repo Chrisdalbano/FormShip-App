@@ -35,8 +35,10 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const props = defineProps({
   quiz: Object,
@@ -53,11 +55,22 @@ const emit = defineEmits([
 ])
 
 const handleDragStart = () => emit('drag-start', props.quiz)
+
 const navigateToQuiz = () => {
-  if (props.quiz.is_published || props.quiz.is_testing) {
-    router.push({ name: 'QuizEvent', params: { id: props.quiz.id } })
+  // FormShip users can always test their quizzes
+  if (authStore.isAuthenticated) {
+    router.push({ 
+      name: 'QuizEvent', 
+      params: { id: props.quiz.id },
+      query: { test: 'true' }  // Add test flag to indicate testing mode
+    })
   } else {
-    alert('This quiz is not published or available for testing.')
+    // For participants, check publish status
+    if (props.quiz.is_published) {
+      router.push({ name: 'QuizEvent', params: { id: props.quiz.id } })
+    } else {
+      alert('This quiz is not published yet.')
+    }
   }
 }
 

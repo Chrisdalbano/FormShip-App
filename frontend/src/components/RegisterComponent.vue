@@ -47,53 +47,60 @@
 </template>
 
 <script>
-import axios from 'axios'
 import { useAuthStore } from '../store/auth'
+import { useAxios } from '@/composables/useAxios'
+import { ref, computed } from 'vue'
 
 export default {
-  data() {
-    return {
-      email: '',
-      password: '',
-      confirmPassword: '',
-    }
-  },
-  computed: {
-    passwordMismatch() {
+  setup(props, { emit }) {
+    const email = ref('')
+    const password = ref('')
+    const confirmPassword = ref('')
+    const authStore = useAuthStore()
+    const { axiosInstance } = useAxios()
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+
+    const passwordMismatch = computed(() => {
       return (
-        this.password &&
-        this.confirmPassword &&
-        this.password !== this.confirmPassword
+        password.value &&
+        confirmPassword.value &&
+        password.value !== confirmPassword.value
       )
-    },
-  },
-  methods: {
-    async register() {
-      if (this.passwordMismatch) {
+    })
+
+    const register = async () => {
+      if (passwordMismatch.value) {
         alert('Passwords do not match')
         return
       }
       try {
-        await axios.post('http://localhost:8000/api/users/register/', {
-          email: this.email,
-          password: this.password,
+        await axiosInstance.post(`${apiBaseUrl}/users/register/`, {
+          email: email.value,
+          password: password.value,
         })
 
-        const loginResponse = await axios.post(
-          'http://localhost:8000/api/users/login/',
+        const loginResponse = await axiosInstance.post(
+          `${apiBaseUrl}/users/login/`,
           {
-            email: this.email,
-            password: this.password,
+            email: email.value,
+            password: password.value,
           },
         )
-        const authStore = useAuthStore()
         authStore.setToken(loginResponse.data.access)
-        this.$emit('register-success')
+        emit('register-success')
       } catch (error) {
         console.error('Registration error:', error.response?.data || error)
         alert('Registration failed')
       }
-    },
-  },
+    }
+
+    return {
+      email,
+      password,
+      confirmPassword,
+      passwordMismatch,
+      register
+    }
+  }
 }
 </script>

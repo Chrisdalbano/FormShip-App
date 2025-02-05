@@ -26,7 +26,7 @@
 <script>
 import LoginComponent from '../components/LoginComponent.vue'
 import RegisterComponent from '../components/RegisterComponent.vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 export default {
   components: { LoginComponent, RegisterComponent },
@@ -37,9 +37,17 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const route = useRoute()
 
     const handleLoginSuccess = () => {
-      router.push({ name: 'QuizDashboard' })
+      // If there's a redirect query parameter, use that
+      const redirectPath = route.query.redirect
+      if (redirectPath) {
+        router.push(redirectPath)
+      } else {
+        // Otherwise go to dashboard
+        router.push({ name: 'QuizDashboard' })
+      }
     }
 
     const handleRegisterSuccess = () => {

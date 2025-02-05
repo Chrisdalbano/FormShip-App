@@ -31,13 +31,13 @@
 
 <script setup>
 import { useRouter } from 'vue-router'
-import { useParticipantStore } from '../store/participant'
+import { useQuizStore } from '@/store/quiz'
 
 const router = useRouter()
-const participantStore = useParticipantStore()
+const quizStore = useQuizStore()
 
 const logout = () => {
-  participantStore.clearParticipant()
+  quizStore.clearParticipantData()
   router.push('/participant/login')
 }
 </script> 

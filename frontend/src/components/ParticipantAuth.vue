@@ -116,8 +116,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
-import { useParticipantStore } from '../store/participant'
+import { useQuizStore } from '@/store/quiz'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -128,7 +127,6 @@ const props = defineProps({
   }
 })
 
-// eslint-disable-next-line no-unused-vars
 const emit = defineEmits(['auth-success'])
 
 const activeTab = ref('login')
@@ -138,30 +136,20 @@ const name = ref('')
 const error = ref('')
 const isLoading = ref(false)
 const router = useRouter()
-const participantStore = useParticipantStore()
+const quizStore = useQuizStore()
 
 const handleAuthSuccess = async (participantData) => {
-  const participantStore = useParticipantStore()
-  
-  // Ensure we have the required data
   if (!participantData?.token || !participantData?.participant_id) {
     error.value = 'Invalid response from server'
     return
   }
 
   try {
-    // First set the participant data in store
-    await participantStore.setParticipantData(participantData)
+    await quizStore.setParticipantData(participantData)
+    emit('auth-success')
     
-    // Wait a moment for the store to update
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    // Verify token with backend
-    await axios.get('/api/participants/me/')
-    
-    // If we get here, token is valid, proceed with navigation
     if (props.quiz?.id) {
-      participantStore.setCurrentQuiz(props.quiz)
+      await quizStore.setCurrentQuiz(props.quiz)
       router.push({
         name: 'QuizEvent',
         params: { id: props.quiz.id }
@@ -174,8 +162,8 @@ const handleAuthSuccess = async (participantData) => {
     }
   } catch (err) {
     console.error('Failed to verify token:', err)
-    error.value = 'Authentication failed. Please try again.'
-    participantStore.clearParticipantData()
+    error.value = err.response?.data?.detail || 'Authentication failed. Please try again.'
+    quizStore.clearParticipantData()
   }
 }
 
@@ -185,24 +173,18 @@ const handleParticipantLogin = async () => {
   error.value = ''
 
   try {
-    console.log('Sending login request:', {
+    const response = await quizStore.authenticateParticipant({
+      endpoint: 'login',
       email: email.value,
       password: password.value,
       quiz_id: props.quiz?.id
     })
 
-    const response = await axios.post('/api/participants/login/', {
-      email: email.value,
-      password: password.value,
-      quiz_id: props.quiz?.id
-    })
-
-    console.log('Login response:', response.data)
-    await handleAuthSuccess(response.data)
+    await handleAuthSuccess(response)
   } catch (err) {
     console.error('Login failed:', err)
     error.value = err.response?.data?.detail || 'Login failed. Please try again.'
-    participantStore.clearParticipantData()
+    quizStore.clearParticipantData()
   } finally {
     isLoading.value = false
   }
@@ -214,21 +196,33 @@ const handleParticipantRegistration = async () => {
   error.value = ''
 
   try {
-    const response = await axios.post('/api/participants/register/', {
+    const response = await quizStore.authenticateParticipant({
+      endpoint: 'register',
       email: email.value,
       password: password.value,
       name: name.value,
       quiz_id: props.quiz?.id
     })
 
-    console.log('Registration response:', response.data)
-    await handleAuthSuccess(response.data)
+    await handleAuthSuccess(response)
   } catch (err) {
     console.error('Registration failed:', err)
     error.value = err.response?.data?.detail || 'Registration failed. Please try again.'
-    participantStore.clearParticipantData()
+    quizStore.clearParticipantData()
   } finally {
     isLoading.value = false
   }
 }
-</script> 
+</script>
+
+<style scoped>
+.input-field {
+  @apply w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500;
+}
+.btn {
+  @apply px-4 py-2 rounded-lg font-medium transition-colors;
+}
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50;
+}
+</style> 
